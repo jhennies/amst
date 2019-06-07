@@ -1,4 +1,4 @@
-# amst
+# AMST
 Alignment to Median Smoothed Template for FIB-SEM data
 
 ## Installation
