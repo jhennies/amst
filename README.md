@@ -1,12 +1,70 @@
-# amst
+# AMST
 Alignment to Median Smoothed Template for FIB-SEM data
 
-## Installation
+## Installation of AMST
 
-Install the dependencies in conda using the env.yml file:
+### Installation of Elastix
 
-    conda env create -f env.yml
+Please also refer to the exlastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl/doxygen/index.html
 
+Extract the downloaded archive to a folder of your choice
+
+Add the following to the .bashrc:
+
+    export PATH=folder/bin:$PATH
+    export LD LIBRARY PATH=folder/lib:$LD LIBRARY PATH
+    
+Calling elastix from command line should now work, e.g.:
+
+    $ elastix --help
+
+### Set up the conda environment
+
+Create the environment and install the following packages like so:
+
+    conda create --name amst_env python=3.6
+    conda install numpy
+    conda install -c conda-forge tifffile
+    conda install -c conda-forge vigra
+    conda install scikit-image
+    pip install pyelastix
+    conda install -c conda-forge silx[full]
 
 ## Usage
 
+An example usage can be found in example_with_sift_advanced_workflow.py showing the basic functionalities of AMST.
+
+## Possible issues
+
+If you encounter an error like this
+
+    RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
+    
+For me, this was fixed by replacing line 497 and following in pyelastix.py from
+
+            command = [get_elastix_exes()[0],
+                   '-m', path_im1, '-f', path_im2, 
+                   '-out', tempdir, '-p', path_params]
+                   
+to 
+
+            command = str.join(' ', [get_elastix_exes()[0],
+                   '-m', path_im1, '-f', path_im2, 
+                   '-out', tempdir, '-p', path_params])
+                   
+and accordingly line 515 from 
+
+            command = [get_elastix_exes()[1],
+                   '-def', 'all', '-out', tempdir, '-tp', path_trafo_params]
+
+to
+
+            command = str.join(' ', [get_elastix_exes()[1],
+                   '-def', 'all', '-out', tempdir, '-tp', path_trafo_params])
+                   
+                   
+If your result data seems all-zero check or lile 558 in pyelastix.py. If it is 
+
+    im = im* (1.0/3000)
+    
+delete it.
