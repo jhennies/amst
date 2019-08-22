@@ -40,28 +40,17 @@ If you encounter an error like this
 
     RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
     
-For me, this was fixed by replacing line 497 and following in pyelastix.py from
+change pyelastix.py line 304 
 
-            command = [get_elastix_exes()[0],
-                   '-m', path_im1, '-f', path_im2, 
-                   '-out', tempdir, '-p', path_params]
-                   
+        p = subprocess.Popen(cmd, shell=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                         
 to 
 
-            command = str.join(' ', [get_elastix_exes()[0],
-                   '-m', path_im1, '-f', path_im2, 
-                   '-out', tempdir, '-p', path_params])
-                   
-and accordingly line 515 from 
+        p = subprocess.Popen(cmd, shell=False,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-            command = [get_elastix_exes()[1],
-                   '-def', 'all', '-out', tempdir, '-tp', path_trafo_params]
-
-to
-
-            command = str.join(' ', [get_elastix_exes()[1],
-                   '-def', 'all', '-out', tempdir, '-tp', path_trafo_params])
-                   
+Also see https://github.com/almarklein/pyelastix/pull/8
                    
 If your result data seems all-zero check or lile 558 in pyelastix.py. If it is 
 
