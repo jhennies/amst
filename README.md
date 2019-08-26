@@ -9,7 +9,7 @@ Please also refer to the exlastix documentation manual that can be downloaded he
 
 Extract the downloaded archive to a folder of your choice
 
-Add the following to the .bashrc:
+For linux add the following to the .bashrc:
 
     export PATH=folder/bin:$PATH
     export LD LIBRARY PATH=folder/lib:$LD LIBRARY PATH
