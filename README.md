@@ -52,7 +52,7 @@ to
 
 Also see https://github.com/almarklein/pyelastix/pull/8
                    
-If your result data seems all-zero check or lile 558 in pyelastix.py. If it is 
+If your result data seems all-zero check line 558 in pyelastix.py. If it is 
 
     im = im* (1.0/3000)
     
