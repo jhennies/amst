@@ -17,12 +17,18 @@ For linux add the following to the .bashrc:
 Calling elastix from command line should now work, e.g.:
 
     $ elastix --help
+    
+### Installing Miniconda
+
+Download miniconda from https://docs.conda.io/en/latest/miniconda.html
+for python3.7
 
 ### Set up the conda environment
 
 Create the environment and install the following packages like so:
 
     conda create --name amst_env python=3.6
+    conda activate amst_env
     conda install numpy
     conda install -c conda-forge tifffile
     conda install -c conda-forge vigra
