@@ -7,6 +7,8 @@ from tifffile import imread, imsave
 from scipy.ndimage.interpolation import shift
 import pickle
 
+import gc
+
 from matplotlib import pyplot as plt
 
 import pyelastix
@@ -247,7 +249,7 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
             pickle.dump(field, f)
 
 
-def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, subpixel_displacement=True):
+def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, subpixel_displacement=True, devicetype='CPU'):
     """
     This function is integrated to get the raw data close to the template with translations only and then run the
     elastix alignment on top.
@@ -289,7 +291,7 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
             warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
             
     # Align the image
-    sa = sift.LinearAlign(ref_im, devicetype='GPU')
+    sa = sift.LinearAlign(ref_im, devicetype=devicetype)
 
     try:
         aligned = sa.align(im, return_all=True, orsa=False, shift_only=shift_only)
@@ -314,6 +316,8 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
     # Do I have to dispose the sa?
     # FIXME Does this work?
     sa.free_buffers()
+    del sa
+    gc.collect()
 
     # Write result
     imsave(os.path.join(target_folder, filename), result.astype(im.dtype))
