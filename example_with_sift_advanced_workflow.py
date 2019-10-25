@@ -73,6 +73,10 @@ maximum_number_of_iterations = 500  # Increase if result is not satisfying, e.g.
 # Others
 save_field = None
 
+# Optional SIFT step
+use_sift_pre_align = True
+device_type = 'GPU'
+
 # << Parameters -- FEEL FREE TO MODIFY HERE --
 # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -89,27 +93,32 @@ if __name__ == '__main__':
     target = os.path.join(results_folder, experiment_name)
 
     # SIFT pre-alignment to get close to the result, the smoothed template will already be generated
-
-    template_align.align_on_template(
-        source,
-        sift_target,
-        source_range=np.s_[:20],
-        template_source_range=np.s_[:20],
-        template_target_folder=template_target,
-        template_source_folder=template_source,
-        make_template_function=template_align.template_functions.median_z,
-        make_template_params=[(median_radius,), {}],
-        alignment_function=template_align.alignment_functions.sift_align,
-        alignment_params=[(), {'shift_only': True,
-                               'subpixel_displacement': False,
-                               'devicetype': 'CPU'}],
-        n_workers=[n_workers, n_workers]
-    )
+    if use_sift_pre_align:
+        if device_type == 'GPU':
+            n_workers_sift = 1
+        else:
+            n_workers_sift = n_workers
+        template_align.align_on_template(
+            source,
+            sift_target,
+            source_range=np.s_[:20],
+            template_source_range=np.s_[:20],
+            template_target_folder=template_target,
+            template_source_folder=template_source,
+            make_template_function=template_align.template_functions.median_z,
+            make_template_params=[(median_radius,), {}],
+            alignment_function=template_align.alignment_functions.sift_align,
+            alignment_params=[(), {'shift_only': True,
+                                   'subpixel_displacement': False,
+                                   'devicetype': device_type}],
+            n_workers=[n_workers, n_workers_sift]
+        )
+        source = sift_target
 
     # Now the final elastix alignment
 
     template_align.align_on_template(
-        sift_target,
+        source,
         target,
         source_range=np.s_[:20],
         template_source_range=np.s_[:20],

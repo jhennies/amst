@@ -314,10 +314,12 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
 
     # FIXME For some reason I now get an OUT_OF_RESOURCES error
     # Do I have to dispose the sa?
-    # FIXME Does this work?
-    sa.free_buffers()
+    # # FIXME Does this work?
+    # for x in range(100):
+    #     sa.free_buffers()
+    #     sa.free_kernels()
+    #     gc.collect()
     del sa
-    gc.collect()
 
     # Write result
     imsave(os.path.join(target_folder, filename), result.astype(im.dtype))
@@ -334,6 +336,7 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
 
     if n_workers == 1:
 
+        print('Running with one worker...')
         for idx in range(len(im_list)):
             func(
                 target_folder, im_list[idx], ref_im_list[idx], *args, **kwargs
