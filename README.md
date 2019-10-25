@@ -35,7 +35,7 @@ Create the environment and install the following packages like so:
     conda install scikit-image
     pip install pyelastix
     conda install -c conda-forge silx[full]
-    conda install pyopengl
+    conda install pyopencl
 
 ## Usage
 
