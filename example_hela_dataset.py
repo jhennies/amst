@@ -14,7 +14,7 @@ amst_align(
     target_folder=target_folder,
     median_radius=median_radius,
     n_workers=n_workers,
-    source_range=np.s_[:50],
+    source_range=np.s_[:],
     with_sift=True,
     sift_params=dict(
         shift_only=True,
