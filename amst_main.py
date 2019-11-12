@@ -2,7 +2,7 @@
 import os
 import numpy as np
 from template_functions import parallel_median_z
-from alignment_functions import alignment_function_wrapper, elastix_align_advanced, sift_align
+from alignment_functions import alignment_function_wrapper, elastix_align_advanced, sift_align, alignment_defaults
 import warnings
 
 
@@ -35,23 +35,10 @@ def amst_align(
         os.mkdir(target_folder)
 
     if sift_params is None:
-        sift_params = dict(
-            shift_only=True,
-            subpixel_displacement=False,
-            devicetype='GPU'
-        )
+        sift_params = alignment_defaults(sift_align)
 
     if elastix_params is None:
-        elastix_params = dict(
-            connected_components=False,
-            transform='AffineTransform',
-            save_field=None,
-            background_value=0,
-            invert_for_align=False,
-            number_of_resolutions=4,
-            maximum_number_of_iterations=500,
-            mode='crop_roi'
-        )
+        elastix_params = alignment_defaults(elastix_align_advanced)
 
     median_z_target_folder = os.path.join(
         target_folder,
@@ -95,7 +82,8 @@ def amst_align(
             alignment_params=sift_params,
             n_workers=n_workers_sift,
             source_range=source_range,
-            ref_range=source_range
+            ref_range=source_range,
+            parallel_method='multi_thread'  # Multiprocessing does not work here
         )
         raw_folder = sift_folder
 
@@ -108,7 +96,8 @@ def amst_align(
         alignment_params=elastix_params,
         n_workers=n_workers,
         source_range=source_range,
-        ref_range=source_range
+        ref_range=source_range,
+        parallel_method='multi_process'
     )
 
 

@@ -2,7 +2,6 @@
 import os
 import numpy as np
 import glob
-from multiprocessing import Pool
 from tifffile import imread, imsave
 from scipy.ndimage.interpolation import shift
 import pickle
@@ -305,7 +304,7 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
     except Exception as e:
         warnings.warn('Initializing SIFT failed with message: {}'.format(str(e)))
         aligned = None
-    
+
     if aligned is not None:
         # The returned result is subpixel displaced
         if subpixel_displacement:
@@ -313,7 +312,7 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
         else:
             # If we don't want subpixel displacement we can use the offset to shift the image
             # This should only be done when shift_only=True
-            # FIXME this should be directly integrated into the sift 
+            # FIXME this should be directly integrated into the sift
             result = shift(im, -np.round(aligned['offset']))
     else:
         # This happens when sift failed
@@ -327,7 +326,8 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
 
 def alignment_function_wrapper(func, source_folder, ref_source_folder, target_folder,
                                alignment_params,
-                               n_workers=1, source_range=np.s_[:], ref_range=np.s_[:]):
+                               n_workers=1, source_range=np.s_[:], ref_range=np.s_[:],
+                               parallel_method='multi_process'):
     """
     Wrapper around the above alignment functions to run (parallelized) over a dataset.
 
@@ -341,6 +341,7 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
         n_workers > 1: multiprocessing
     :param source_range: for debugging to select a subset of the moving images
     :param ref_range: for debugging to select a subset of the fixed images
+    :param parallel_method: Either 'multi_process' or 'multi_thread'
     :return:
     """
 
@@ -360,19 +361,40 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
 
     else:
 
-        with Pool(processes=n_workers) as p:
+        if parallel_method == 'multi_process':
+            from multiprocessing import Pool
+            with Pool(processes=n_workers) as p:
 
-            tasks = [
-                p.apply_async(
-                    func, (
-                        target_folder, im_list[idx], ref_im_list[idx]
-                    ),
-                    alignment_params
-                )
-                for idx in range(len(im_list))
-            ]
+                tasks = [
+                    p.apply_async(
+                        func, (
+                            target_folder, im_list[idx], ref_im_list[idx]
+                        ),
+                        alignment_params
+                    )
+                    for idx in range(len(im_list))
+                ]
 
-            [task.get() for task in tasks]
+                [task.get() for task in tasks]
+
+        elif parallel_method == 'multi_thread':
+            from concurrent.futures import ThreadPoolExecutor as TPool
+            with TPool(max_workers=n_workers) as p:
+
+                tasks = [
+                    p.submit(
+                        func,
+                        target_folder, im_list[idx], ref_im_list[idx],
+                        **alignment_params
+                    )
+                    for idx in range(len(im_list))
+                ]
+
+                [task.result() for task in tasks]
+
+        else:
+            print("Only 'multi_process' and 'multi_thread' are implemented.")
+            raise NotImplementedError
 
 
 def alignment_defaults(func):
