@@ -23,14 +23,8 @@ def _register_with_elastix(moving, ref,
                            number_of_resolutions,
                            maximum_number_of_iterations,
                            final_grid_spacing_in_physical_units,
-                           image_pyramid_schedule,
-                           automatic_transform_initialization=True,
-                           automatic_scales_estimation=False,
+                           image_pyramid_schedule
                            ):
-
-    # FIXME: this should not be set like this by default
-    if image_pyramid_schedule is None:
-        image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
 
     # Set the parameters. Pyelastix offers automatic and sensible defaults
     if transform == 'AffineTransform':
@@ -39,12 +33,14 @@ def _register_with_elastix(moving, ref,
         params = pyelastix.get_default_params()
     # Modify the parameters as desired by input
     params.Transform = transform
-    params.NumberOfResolutions = number_of_resolutions
-    params.MaximumNumberOfIterations = maximum_number_of_iterations
-    params.FinalGridSpacingInPhysicalUnits = final_grid_spacing_in_physical_units
-    params.AutomaticTransformInitialization = automatic_transform_initialization
-    params.AutomaticScalesEstimation = automatic_scales_estimation
-    params.ImagePyramidSchedule = image_pyramid_schedule
+    if number_of_resolutions is not None:
+        params.NumberOfResolutions = number_of_resolutions
+    if maximum_number_of_iterations is not None:
+        params.MaximumNumberOfIterations = maximum_number_of_iterations
+    if final_grid_spacing_in_physical_units is not None:
+        params.FinalGridSpacingInPhysicalUnits = final_grid_spacing_in_physical_units
+    if image_pyramid_schedule is not None:
+        params.ImagePyramidSchedule = image_pyramid_schedule
     # Hard-coded as integers won't work
     params.ResultImagePixelType = "float"
 
@@ -89,9 +85,9 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
                            save_field=None,
                            background_value=0,
                            invert_for_align=False,
-                           number_of_resolutions=4,
-                           maximum_number_of_iterations=500,
-                           final_grid_spacing_in_physical_units=16,
+                           number_of_resolutions=None,
+                           maximum_number_of_iterations=None,
+                           final_grid_spacing_in_physical_units=None,
                            image_pyramid_schedule=None,
                            mode='no_crop'
                            ):
@@ -112,6 +108,8 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
     :param number_of_resolutions:
     :param maximum_number_of_iterations:
     :param final_grid_spacing_in_physical_units:
+    :param image_pyramid_schedule
+
     :param mode:
         'crop_roi': Both reference and moving image are cropped to the roi, only works if result is already close
         'no_crop': No cropping
@@ -119,16 +117,18 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
     :return:
     """
 
-    # General initializations
     # >>>>>>>>>>>>>>>>>>>>>>>
+    # General initializations
+
     if not connected_components:
+        if mode == 'crop_roi':
+            warnings.warn("mode='crop_roi' only implemented for connected_components=True, setting mode to 'no_crop'")
         mode = 'no_crop'
 
-    if image_pyramid_schedule is None:
-        image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
-
+    # Getting the filename of the input image
     filename = os.path.split(im_filepath)[1]
 
+    # Skip this file if the result is already there
     if os.path.isfile(os.path.join(target_folder, filename)):
         print('_elastix_align: {} exists, nothing to do'.format(filename))
         return
@@ -149,6 +149,9 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
             raise NotImplementedError
 
     # <<<<<<<<<<<<<<<<<<<<<<<<
+
+    # >>>>>>>>>>>>>>>>>>>>>>>>
+    # Some helper functions
 
     # Invert images
     def _invert_image(im):
@@ -204,10 +207,14 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
 
         return cpnts, bnds
 
-    # Components is organized just as ims: [[moving, thresholded moving, reference], ...]
+    # <<<<<<<<<<<<<<<<<<<<<<<<
+
+    # Components is organized just as ims: [[moving, reference], ...]
     if connected_components:
+        # Determine the connected components
         components, bounds = _connected_components(*ims)
     else:
+        # Treat the image as one connected component
         components = [ims]
         bounds = []
 
@@ -312,13 +319,6 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
         # This happens when sift failed
         result = im
 
-    # FIXME For some reason I now get an OUT_OF_RESOURCES error
-    # Do I have to dispose the sa?
-    # # FIXME Does this work?
-    # for x in range(100):
-    #     sa.free_buffers()
-    #     sa.free_kernels()
-    #     gc.collect()
     del sa
 
     # Write result
@@ -326,10 +326,26 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
 
 
 def alignment_function_wrapper(func, source_folder, ref_source_folder, target_folder,
-                               *args, n_workers=1, source_range=np.s_[:], ref_range=np.s_[:], **kwargs):
+                               alignment_params,
+                               n_workers=1, source_range=np.s_[:], ref_range=np.s_[:]):
+    """
+    Wrapper around the above alignment functions to run (parallelized) over a dataset.
+
+    :param func: the alignment function which will be called
+    :param source_folder: The folder from which to take the moving images
+    :param ref_source_folder: The folder from which to take the fixed images
+    :param target_folder: The folder to store the results
+    :param alignment_params: Keyword arguments for the alignment function
+    :param n_workers: For multiprocessing
+        n_workers == 1: normal function call
+        n_workers > 1: multiprocessing
+    :param source_range: for debugging to select a subset of the moving images
+    :param ref_range: for debugging to select a subset of the fixed images
+    :return:
+    """
+
     print('Computing {} with n_workers={}'.format(func, n_workers))
-    print('args = {}'.format(args))
-    print('kwargs = {}'.format(kwargs))
+    print('alignment_params = {}'.format(alignment_params))
 
     im_list = np.array(sorted(glob.glob(os.path.join(source_folder, '*.tif'))))[source_range]
     ref_im_list = np.array(sorted(glob.glob(os.path.join(ref_source_folder, '*.tif'))))[ref_range]
@@ -339,7 +355,7 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
         print('Running with one worker...')
         for idx in range(len(im_list)):
             func(
-                target_folder, im_list[idx], ref_im_list[idx], *args, **kwargs
+                target_folder, im_list[idx], ref_im_list[idx], **alignment_params
             )
 
     else:
@@ -349,9 +365,9 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
             tasks = [
                 p.apply_async(
                     func, (
-                        target_folder, im_list[idx], ref_im_list[idx], *args
+                        target_folder, im_list[idx], ref_im_list[idx]
                     ),
-                    kwargs
+                    alignment_params
                 )
                 for idx in range(len(im_list))
             ]
@@ -359,28 +375,34 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
             [task.get() for task in tasks]
 
 
-def defaults(func):
+def alignment_defaults(func):
     """
-    Implement default parameters here.
-    FIXME: I am pretty sure there is a more elegant solution to this.
+    Returns default parameter sets for alignment functions.
 
-    :param func:
-    :return:
+    :param func: the function for which to return the default parameter set
+    :return: the parameter set as dictionary
     """
 
     if func == sift_align:
-        return (), {'shift_only': False,
-                    'subpixel_displacement': True}
-    elif func == elastix_align:
-        return (), {'transform': 'AffineTransform',
-                    'number_of_resolutions': 4}
-    elif func == elastix_on_connected_components:
-        return (), {'transform': 'AffineTransform',
-                    'number_of_resolutions': 4,
-                    'background_value': 0}
+        return dict(
+            shift_only=False,
+            subpixel_displacement=True,
+            devicetype='GPU'
+        )
+    elif func == elastix_align_advanced:
+        return dict(
+            connected_components=False,
+            transform='AffineTransform',
+            save_field=None,
+            background_value=0,
+            invert_for_align=False,
+            number_of_resolutions=4,
+            maximum_number_of_iterations=500,
+            mode='no_crop'
+        )
 
     # Return empty if nothing is implemented
     warnings.warn('Default parameters for this function are not implemented. Returning empty paramenters and hoping for the best...')
-    return (), {}
+    return dict()
 
 

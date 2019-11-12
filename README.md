@@ -7,13 +7,22 @@ Alignment to Median Smoothed Template for FIB-SEM data
 
 Please also refer to the exlastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl/doxygen/index.html
 
-Extract the downloaded archive to a folder of your choice
+Extract the downloaded archive to a folder of your choice (/path/to/elastix)
 
-For linux add the following to the .bashrc:
+For Linux add the following to the .bashrc:
 
-    export PATH=folder/bin:$PATH
-    export LD LIBRARY PATH=folder/lib:$LD LIBRARY PATH
+    export PATH=/path/to/elastix/bin:$PATH
+    export LD LIBRARY PATH=/path/to/elastix/lib:$LD LIBRARY PATH
     
+Replace '/path/to/elastix/' by the correct folder where elastix was imported to and which contains the bin and lib folders.
+    
+Likewise, for Windows add
+
+    /path/to/elastix/bin
+    /path/to/elastix/lib
+    
+to the environment variables.
+
 Calling elastix from command line should now work, e.g.:
 
     $ elastix --help
@@ -25,28 +34,55 @@ for python3.7
 
 ### Set up the conda environment
 
-Create the environment and install the following packages like so:
+Create an new environment:
 
     conda create --name amst_env python=3.6
+
+Activate it:
+
     conda activate amst_env
+    
+Install required packages:
+
     conda install numpy
     conda install -c conda-forge tifffile
-    conda install -c conda-forge vigra
     conda install scikit-image
+    conda install -c conda-forge vigra
     pip install pyelastix
     conda install -c conda-forge silx[full]
-    conda install pyopencl
+    conda install -c conda-forge pyopencl
 
 ## Usage
 
 An example usage can be found in example_with_sift_advanced_workflow.py showing the basic functionalities of AMST.
 
-## Possible issues
+## Known errors and issues
 
-If you encounter an error like this
+### pyopencl._cl.LogicError: clGetPlatformIDs failed: PLATFORM_NOT_FOUND_KHR
 
-    RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
+OpenCl cannot find the proper drivers. This affects the SIFT alignment step which gets the raw close to the template before running Elastix.
+
+To get the GPU working on Linux, copy the graphics vendors (e.g. Nvidia.icd) from 
     
+    /etc/OpenCL/vendors 
+    
+to 
+
+    /path/to/miniconda3/envs/amst_env/etc/OpenCL/
+    
+Create the OpenCL folder if necessary. 
+
+Alternatively, to get the SIFT running at least on the CPU:
+
+In the conda evironment install:
+
+    conda install -c conda-forge pocl
+    
+    
+### RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
+
+This is a reported bug in the pyelastix package (which does not affect Windows, apparently). To fix it, do the following:
+
 change pyelastix.py line 304 
 
         p = subprocess.Popen(cmd, shell=True,
@@ -58,8 +94,11 @@ to
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 Also see https://github.com/almarklein/pyelastix/pull/8
-                   
-If your result data seems all-zero check line 558 in pyelastix.py. If it is 
+    
+### Result data seems all-zero 
+
+There seems to be some debug code left in the pyelastix package.
+Check line 558 in pyelastix.py. If it is 
 
     im = im* (1.0/3000)
     
