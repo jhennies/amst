@@ -94,7 +94,7 @@ def amst_align(
         ref_source_folder=median_z_target_folder,
         target_folder=target_folder,
         alignment_params=elastix_params,
-        n_workers=n_workers,
+        n_workers=1,  # Elastix is already multiprocessing itself
         source_range=source_range,
         ref_range=source_range,
         parallel_method='multi_process'
