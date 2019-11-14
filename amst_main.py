@@ -2,7 +2,9 @@
 import os
 import numpy as np
 from template_functions import parallel_median_z
-from alignment_functions import alignment_function_wrapper, elastix_align_advanced, sift_align, alignment_defaults
+from alignment_functions import alignment_function_wrapper, elastix_align_advanced, alignment_defaults
+from alignment_functions import sift_align
+from alignment_functions import displacement_wrapper
 import warnings
 
 
@@ -13,6 +15,7 @@ def amst_align(
         median_radius=7,
         n_workers=16,
         source_range=np.s_[:],
+        displacements_file=None,
         with_sift=True,
         sift_params=None,
         elastix_params=None
@@ -56,6 +59,7 @@ def amst_align(
         source_range=source_range
     )
 
+    # Drop this step (or at least make it very optional)
     # SIFT to get the raw data close to the template
     if with_sift:
         sift_folder = os.path.join(
@@ -87,6 +91,23 @@ def amst_align(
         )
         raw_folder = sift_folder
 
+    # This replaces the SIFT if initial shifts are available
+    if displacements_file is not None:
+        displacements_folder = os.path.join(
+            target_folder,
+            'displaced'
+        )
+        if not os.path.exists(displacements_folder):
+            os.mkdir(displacements_folder)
+        displacement_wrapper(
+            source_folder=raw_folder,
+            target_folder=displacements_folder,
+            displacements_file=displacements_file,
+            n_workers=n_workers,
+            source_range=source_range
+        )
+        raw_folder = displacements_folder
+
     # Affine transformations with Elastix
     alignment_function_wrapper(
         func=elastix_align_advanced,
@@ -94,7 +115,7 @@ def amst_align(
         ref_source_folder=median_z_target_folder,
         target_folder=target_folder,
         alignment_params=elastix_params,
-        n_workers=1,  # Elastix is already multiprocessing itself
+        n_workers=10,  # Elastix is already multiprocessing itself
         source_range=source_range,
         ref_range=source_range,
         parallel_method='multi_process'

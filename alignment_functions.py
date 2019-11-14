@@ -12,9 +12,14 @@ from matplotlib import pyplot as plt
 
 import pyelastix
 
-from silx.image import sift
 import warnings
 import vigra
+import csv
+
+try:
+    from silx.image import sift
+except ModuleNotFoundError:
+    print('silx.image.sift is not available')
 
 
 def _register_with_elastix(moving, ref,
@@ -253,6 +258,111 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
         filename = os.path.splitext(filename)[0]
         with open(os.path.join(save_field, '{}.pkl'.format(filename)), mode='wb') as f:
             pickle.dump(field, f)
+
+
+def displace(target_folder, im_filepath, displacement):
+
+    filename = os.path.split(im_filepath)[1]
+    if os.path.isfile(os.path.join(target_folder, filename)):
+        print('_sift_align: {} exists, nothing to do'.format(filename))
+        return
+
+    print('displacements on {}'.format(filename))
+
+    # Load image
+    im = imread(im_filepath)
+
+    # FIXME figure out if this is right
+    # Shift the image
+    im = shift(im, (np.round(displacement[1]), np.round(displacement[0])))
+
+    # Write result
+    imsave(os.path.join(target_folder, filename), im.astype(im.dtype))
+
+
+def displacement_wrapper(
+        source_folder, target_folder,
+        displacements_file,
+        n_workers=1, source_range=np.s_[:],
+        parallel_method='multi_process'):
+    """
+    Wrapper around the above alignment functions to run (parallelized) over a dataset.
+
+    :param func: the alignment function which will be called
+    :param source_folder: The folder from which to take the moving images
+    :param ref_source_folder: The folder from which to take the fixed images
+    :param target_folder: The folder to store the results
+    :param alignment_params: Keyword arguments for the alignment function
+    :param n_workers: For multiprocessing
+        n_workers == 1: normal function call
+        n_workers > 1: multiprocessing
+    :param source_range: for debugging to select a subset of the moving images
+    :param ref_range: for debugging to select a subset of the fixed images
+    :param parallel_method: Either 'multi_process' or 'multi_thread'
+    :return:
+    """
+
+    print('Computing {} with n_workers={}'.format(displace, n_workers))
+
+    im_list = np.array(sorted(glob.glob(os.path.join(source_folder, '*.tif'))))[source_range]
+
+    # Load the displacements
+    # FIXME This currently assumes Fiji's 1-based slice numbering
+    displacements = dict()
+    with open(displacements_file) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        line_count = 0
+        for row in csv_reader:
+            if line_count == 0:
+                pass
+            else:
+                displacements[int(row[0]) - 1] = (float(row[1]), float(row[2]))
+            line_count += 1
+    assert min(displacements.keys()) >= 0, "Slice indices are assumed in Fiji's 1-based slice numbering!"
+
+    if n_workers == 1:
+
+        print('Running with one worker...')
+        for idx in range(len(im_list)):
+            if idx in displacements.keys():
+                displace(
+                    target_folder, im_list[idx], displacements[idx]
+                )
+
+    else:
+
+        if parallel_method == 'multi_process':
+            from multiprocessing import Pool
+            with Pool(processes=n_workers) as p:
+
+                tasks = [
+                    p.apply_async(
+                        displace, (
+                            target_folder, im_list[idx], displacements[idx]
+                        )
+                    )
+                    for idx in range(len(im_list)) if idx in displacements.keys()
+                ]
+
+                [task.get() for task in tasks]
+
+        elif parallel_method == 'multi_thread':
+            from concurrent.futures import ThreadPoolExecutor as TPool
+            with TPool(max_workers=n_workers) as p:
+
+                tasks = [
+                    p.submit(
+                        displace,
+                        target_folder, im_list[idx], displacements[idx]
+                    )
+                    for idx in range(len(im_list)) if idx in displacements.keys()
+                ]
+
+                [task.result() for task in tasks]
+
+        else:
+            print("Only 'multi_process' and 'multi_thread' are implemented.")
+            raise NotImplementedError
 
 
 def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, subpixel_displacement=True, devicetype='CPU'):
