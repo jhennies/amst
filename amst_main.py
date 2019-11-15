@@ -325,9 +325,11 @@ def _register_with_elastix(fixed, moving,
     params.ResultImagePixelType = "float"
 
     # The registration
-    result, _ = pyelastix.register(moving.astype('float32'),
-                                       fixed.astype('float32'), params,
-                                       verbose=0)
+    result, _ = pyelastix.register(
+        moving.astype('float32'),
+        fixed.astype('float32'), params,
+        verbose=0
+    )
 
     # The result is read only when it comes out of pyelastix -- copying and replacing fixes that
     result = result.copy()
@@ -357,6 +359,7 @@ def amst_align(
         median_radius=7,
         n_workers=8,
         n_workers_elastix=1,
+        n_workers_sift=1,
         sift_devicetype='GPU'
 ):
 
@@ -380,18 +383,28 @@ def amst_align(
 
         # Function 2:
         #
-        # Run SIFT align with one thread on full batch
+        # Run SIFT align with one thread
         # Initialize the SIFT
         sift_ocl = sift.SiftPlan(template=templates_med[0], devicetype=sift_devicetype)
+        print("Device used for calculation: ", sift_ocl.ctx.devices[0].name)
         # Run the SIFT
-        offsets = [_sift_on_pair(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl=sift_ocl) for idx in range(len(templates_med))]
+        if n_workers_sift > 1:
+            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+                tasks = [
+                    tpe.submit(
+                        _sift_on_pair, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl)
+                    )
+                    for idx in range(len(templates_med))
+                ]
+                offsets = [task.result() for task in tasks]
+        else:
+            offsets = [_sift_on_pair(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl=sift_ocl) for idx in range(len(templates_med))]
         del templates_med_smooth
         del raws_crop_smooth
 
         # Function 3:
         #
         # Shift the batch of data in parallel
-        # Return batch
         if n_workers > 1:
             with Pool(processes=n_workers) as p:
                 tasks = [
@@ -406,19 +419,15 @@ def amst_align(
 
         # # Function 4:
         # #
-        # # Register with ELASTIX with one thread on full batch
-        # # Return batch
-        if n_workers_elastix > 1:
-            with Pool(processes=n_workers_elastix) as p:
-                tasks = [
-                    p.apply_async(
-                        _register_with_elastix,
-                        (templates_med[idx], raws_crop[idx], names[idx])
-                    )
-                    for idx in range(len(raws_crop))
-                ]
-                raws_crop = [task.get() for task in tasks]
-        raws_crop = [_register_with_elastix(templates_med[idx], raws_crop[idx], name=names[idx]) for idx in range(len(raws_crop))]
+        # # Register with ELASTIX with one thread
+        raws_crop = [
+            _register_with_elastix(
+                templates_med[idx], raws_crop[idx], name=names[idx],
+                number_of_resolutions=3,
+                maximum_number_of_iterations=250
+            )
+            for idx in range(len(raws_crop))
+        ]
         del templates_med
 
         # Function 5:
@@ -441,14 +450,19 @@ def amst_align(
 
 if __name__ == '__main__':
 
-    raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
-    pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_00/'
+    # raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
+    # pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    # target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_00/'
+    raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
+    pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
 
     amst_align(
         raw_folder=raw,
         pre_alignment_folder=pre,
         target_folder=target,
-        n_workers=16,
-        n_workers_elastix=1
+        n_workers=12,
+        n_workers_elastix=1,
+        n_workers_sift=1,
+        sift_devicetype='GPU'
     )
