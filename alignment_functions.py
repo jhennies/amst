@@ -98,6 +98,8 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
                            maximum_number_of_iterations=500,
                            final_grid_spacing_in_physical_units=16,
                            image_pyramid_schedule=None,
+                           automatic_scales_estimation=True,
+                           automatic_transform_initialization=True,
                            mode='no_crop'
                            ):
     """
@@ -229,7 +231,9 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
                                                 number_of_resolutions,
                                                 maximum_number_of_iterations,
                                                 final_grid_spacing_in_physical_units,
-                                                image_pyramid_schedule)
+                                                image_pyramid_schedule,
+                                                automatic_transform_initialization,
+                                                automatic_scales_estimation)
 
         # Write results back into a result image
         if mode == 'crop_roi':
