@@ -196,9 +196,12 @@ def _sift_on_pair(fixed, moving, sift_ocl, devicetype='GPU'):
     return offset
 
 
-def _displace_slice(image, offset):
+def _displace_slice(image, offset, result_filepath=None):
 
     image = shift(image, -np.round([offset[1], offset[0]]))
+
+    if result_filepath is not None:
+        imsave(result_filepath, image)
 
     return image
 
@@ -324,7 +327,7 @@ def amst_align(
                 with Pool(processes=n_workers) as p:
                     tasks = [
                         p.apply_async(
-                            _displace_slice, (raws_crop[idx], offsets[idx])
+                            _displace_slice, (raws_crop[idx], offsets[idx], os.path.join(target_folder, 'sift', names[idx]))
                         )
                         for idx in range(len(raws_crop))
                     ]
@@ -379,7 +382,7 @@ if __name__ == '__main__':
         pre_alignment_folder=pre,
         target_folder=target,
         sift_pre_align=True,
-        sift_sigma=1.6,
+        sift_sigma=None,
         n_workers=12,
         n_workers_sift=1,
         sift_devicetype='GPU'

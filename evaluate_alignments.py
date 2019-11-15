@@ -453,6 +453,30 @@ if __name__ == '__main__':
     )
     statistics(target)
 
+    print('old_res2')
+    source = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_191115_00_test_original_wf_res2/'
+    target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_191115_00_test_original_wf_res2/offsets.pkl'
+    if not os.path.isfile(target):
+        evaluate_alignment(
+            source_folder=source,
+            areas=areas,
+            n_workers=1,
+            target_filepath=target,
+            z_range=z_range,
+            plot=False,
+            sigma=1.6,
+            func=_evaluate_alignment_with_sift
+        )
+    plt.figure()
+    plot_alignment_quality(
+        source_filepath=target,
+        multiple_plots=False,
+        ymin=-0.2, ymax=5, xmin=0, xmax=None,
+        pixel_size=[0.008, 5],
+        units=['um', 'nm']
+    )
+    statistics(target)
+
     plt.show()
 
 
