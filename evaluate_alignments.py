@@ -6,11 +6,12 @@ from tifffile import imread, imsave
 from silx.image import sift
 from vigra.filters import gaussianSmoothing
 import pickle
+# from alignment_functions import _register_with_elastix
 
 from matplotlib import pyplot as plt
 
 
-def _evaluate_alignment(im_0, im_1, areas, sigma=1.):
+def _evaluate_alignment_with_sift(im_0, im_1, areas, sigma=1.):
     print(im_0)
 
     im_0 = imread(im_0)
@@ -49,15 +50,52 @@ def _evaluate_alignment(im_0, im_1, areas, sigma=1.):
     return offset
 
 
-def evaluate_alignment_with_local_sift(source_folder, areas, n_workers=16, target_filepath=None, z_range=None,
-                                       plot=False, sigma=1.):
+# def _evaluate_alignment_with_elastix(im_0, im_1, areas, sigma=1.):
+#     print(im_0)
+#
+#     im_0 = imread(im_0)
+#     im_1 = imread(im_1)
+#
+#     if im_0.dtype == 'uint16':
+#         im_0 = (im_0 / (65536 / 255)).astype('uint8')
+#     if im_1.dtype == 'uint16':
+#         im_1 = (im_1 / (65536 / 255)).astype('uint8')
+#
+#     # im_0 = gaussianSmoothing(im_0, sigma)
+#     # im_1 = gaussianSmoothing(im_1, sigma)
+#
+#     offset = []
+#
+#     for area in areas:
+#
+#         crop_0 = im_0[area]
+#         crop_1 = im_1[area]
+#
+#         # crop_0 = gaussianSmoothing(crop_0, sigma)
+#         # crop_1 = gaussianSmoothing(crop_1, sigma)
+#
+#         try:
+#             # Do the alignment
+#             _, field = _register_with_elastix(crop_1, crop_0, 'TranslationTransform',None,100,None,None)
+#             offset.append(np.array(field)[:, 0, 0])
+#
+#         except TypeError:
+#             print('Warning: The alignment failed, appending [None, None]')
+#             offset.append([None, None])
+#
+#     return offset
+
+
+def evaluate_alignment(source_folder, areas, n_workers=16, target_filepath=None, z_range=None,
+                                       plot=False, sigma=1.,
+                                       func=_evaluate_alignment_with_sift):
     if z_range is None:
         imlist = np.array(sorted(glob.glob(os.path.join(source_folder, '*.tif'))))
     else:
         imlist = np.array(sorted(glob.glob(os.path.join(source_folder, '*.tif'))))[z_range]
 
     if n_workers == 1:
-        offsets = [_evaluate_alignment(imlist[idx], imlist[idx + 1], areas, sigma=sigma) for idx in
+        offsets = [func(imlist[idx], imlist[idx + 1], areas, sigma=sigma) for idx in
                    range(len(imlist) - 1)]
 
     else:
@@ -66,7 +104,7 @@ def evaluate_alignment_with_local_sift(source_folder, areas, n_workers=16, targe
 
             tasks = [
                 p.apply_async(
-                    _evaluate_alignment,
+                    func,
                     (imlist[idx], imlist[idx + 1], areas),
                     {'sigma': sigma}
                 )
@@ -255,11 +293,143 @@ def statistics(source_filepath, mode='offsets'):
 
 if __name__ == '__main__':
 
-    source = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/slices_part1.2a-f_inverted'
-    target = '/g/schwab/hennies/phd_project/playground/e180912_00_evaluation_of_alignments_development/offsets.pkl'
+    # source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/amst_aligned'
+    # target_amst = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_amst.pkl'
+    # areas = [
+    #     np.s_[357:869, 2990:3504],
+    #     np.s_[1850:2362, 2992:3504]
+    # ]
+    # z_range = np.s_[424:680]
+    # # evaluate_alignment_with_local_sift(
+    # #     source_folder=source,
+    # #     areas=areas,
+    # #     n_workers=1,
+    # #     target_filepath=target_amst,
+    # #     z_range=z_range,
+    # #     plot=False,
+    # #     sigma=1.6
+    # # )
+    #
+    # source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/tm_ali_refined'
+    # target_imod = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_imod.pkl'
+
+    # # evaluate_alignment_with_local_sift(
+    # #     source_folder=source,
+    # #     areas=areas,
+    # #     n_workers=1,
+    # #     target_filepath=target_imod,
+    # #     z_range=z_range,
+    # #     plot=False,
+    # #     sigma=1.6
+    # # )
+    #
+    # statistics(target_amst)
+    # statistics(target_imod)
+    #
+    # plot_alignment_quality(
+    #     source_filepath=target_amst,
+    #     multiple_plots=False,
+    #     ymin=-0.2, ymax=3, xmin=0, xmax=None,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm']
+    # )
+    # plt.figure()
+    # plot_alignment_quality(
+    #     source_filepath=target_imod,
+    #     multiple_plots=False,
+    #     ymin=-0.2, ymax=3, xmin=0, xmax=None,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm']
+    # )
+    # plt.figure()
+    # plot_alignment_improvement(
+    #     target_imod, target_amst,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm'],
+    #     ymin=-3, ymax=3, xmin=0, xmax=None,
+    #     mode='offsets'
+    # )
+    # plt.show()
+
+
     areas = [
-        np.s_[210:722, 2100:2612],
-        np.s_[2000:2512, 2100:2612]
+        np.s_[357:869, 2990:3504],
+        np.s_[1850:2362, 2992:3504]
     ]
-    evaluate_alignment(source, areas, n_workers=1, target_filepath=target)
+    z_range = np.s_[16:48]
+
+    print('imod2')
+    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/tm_ali_refined'
+    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_imod2.pkl'
+    if not os.path.isfile(target):
+        evaluate_alignment(
+            source_folder=source,
+            areas=areas,
+            n_workers=1,
+            target_filepath=target,
+            z_range=z_range,
+            plot=False,
+            sigma=1.6,
+            func=_evaluate_alignment_with_sift
+        )
+    plot_alignment_quality(
+        source_filepath=target,
+        multiple_plots=False,
+        ymin=-0.2, ymax=5, xmin=0, xmax=None,
+        pixel_size=[0.008, 5],
+        units=['um', 'nm']
+    )
+    statistics(target)
+
+    print('res2_it500_sift_from_old')
+    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_res2_it500_sift_from_old/'
+    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_fast_amst_res2_it500_sift_from_old.pkl'
+    if not os.path.isfile(target):
+        evaluate_alignment(
+            source_folder=source,
+            areas=areas,
+            n_workers=1,
+            target_filepath=target,
+            z_range=z_range,
+            plot=False,
+            sigma=1.6,
+            func=_evaluate_alignment_with_sift
+        )
+    plt.figure()
+    plot_alignment_quality(
+        source_filepath=target,
+        multiple_plots=False,
+        ymin=-0.2, ymax=5, xmin=0, xmax=None,
+        pixel_size=[0.008, 5],
+        units=['um', 'nm']
+    )
+    statistics(target)
+
+    print('amst_aligned_res2')
+    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/amst_aligned_res2/'
+    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_amst_aligned_res2.pkl'
+    if not os.path.isfile(target):
+        evaluate_alignment(
+            source_folder=source,
+            areas=areas,
+            n_workers=1,
+            target_filepath=target,
+            z_range=z_range,
+            plot=False,
+            sigma=1.6,
+            func=_evaluate_alignment_with_sift
+        )
+    plt.figure()
+    plot_alignment_quality(
+        source_filepath=target,
+        multiple_plots=False,
+        ymin=-0.2, ymax=5, xmin=0, xmax=None,
+        pixel_size=[0.008, 5],
+        units=['um', 'nm']
+    )
+    statistics(target)
+
+
+    plt.show()
+
 

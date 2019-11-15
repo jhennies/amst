@@ -48,7 +48,10 @@ def pre_processing_generator(
         del ims
 
         # Gaussian smooth the median_z for the SIFT step
-        median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
+        if sift_sigma is not None:
+            median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
+        else:
+            median_z_smooth = median_z
 
         # --------------------------------------------------------------------------------------------------------------
         # Return the results
@@ -85,7 +88,10 @@ def pre_processing_generator(
                 warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
 
         # Gaussian smooth the slice for the SIFT step
-        im_smooth = gaussianSmoothing(im, sift_sigma)
+        if sift_sigma is not None:
+            im_smooth = gaussianSmoothing(im, sift_sigma)
+        else:
+            im_smooth = im
 
         return im, im_smooth
 
@@ -260,8 +266,9 @@ def amst_align(
         pre_alignment_folder,
         target_folder,
         median_radius=7,
+        sift_pre_align=True,
+        sift_sigma=None,
         n_workers=8,
-        n_workers_elastix=1,
         n_workers_sift=1,
         sift_devicetype='GPU'
 ):
@@ -281,44 +288,49 @@ def amst_align(
             raw_folder,
             pre_alignment_folder,
             median_radius=median_radius,
+            sift_sigma=sift_sigma,
             n_workers=n_workers
     ):
 
-        # Function 2:
-        #
-        # Run SIFT align with one thread
-        # Initialize the SIFT
-        sift_ocl = sift.SiftPlan(template=templates_med[0], devicetype=sift_devicetype)
-        print("Device used for calculation: ", sift_ocl.ctx.devices[0].name)
-        # Run the SIFT
-        if n_workers_sift > 1:
-            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
-                tasks = [
-                    tpe.submit(
-                        _sift_on_pair, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl)
-                    )
+        if sift_pre_align:
+            # Function 2:
+            #
+            # Run SIFT align with one thread
+            # Initialize the SIFT
+            sift_ocl = sift.SiftPlan(template=templates_med[0], devicetype=sift_devicetype)
+            print("Device used for calculation: ", sift_ocl.ctx.devices[0].name)
+            # Run the SIFT
+            if n_workers_sift > 1:
+                with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+                    tasks = [
+                        tpe.submit(
+                            _sift_on_pair, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl)
+                        )
+                        for idx in range(len(templates_med))
+                    ]
+                    offsets = [task.result() for task in tasks]
+            else:
+                offsets = [
+                    _sift_on_pair(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl=sift_ocl)
                     for idx in range(len(templates_med))
                 ]
-                offsets = [task.result() for task in tasks]
-        else:
-            offsets = [_sift_on_pair(templates_med_smooth[idx], raws_crop_smooth[idx], sift_ocl=sift_ocl) for idx in range(len(templates_med))]
-        del templates_med_smooth
-        del raws_crop_smooth
+            del templates_med_smooth
+            del raws_crop_smooth
 
-        # Function 3:
-        #
-        # Shift the batch of data in parallel
-        if n_workers > 1:
-            with Pool(processes=n_workers) as p:
-                tasks = [
-                    p.apply_async(
-                        _displace_slice, (raws_crop[idx], offsets[idx])
-                    )
-                    for idx in range(len(raws_crop))
-                ]
-                raws_crop = [task.get() for task in tasks]
-        else:
-            raws_crop = [_displace_slice(raws_crop[idx], offsets[idx]) for idx in range(len(raws_crop))]
+            # Function 3:
+            #
+            # Shift the batch of data in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _displace_slice, (raws_crop[idx], offsets[idx])
+                        )
+                        for idx in range(len(raws_crop))
+                    ]
+                    raws_crop = [task.get() for task in tasks]
+            else:
+                raws_crop = [_displace_slice(raws_crop[idx], offsets[idx]) for idx in range(len(raws_crop))]
 
         # # Function 4:
         # #
@@ -326,8 +338,9 @@ def amst_align(
         raws_crop = [
             _register_with_elastix(
                 templates_med[idx], raws_crop[idx], name=names[idx],
-                number_of_resolutions=3,
-                maximum_number_of_iterations=250
+                number_of_resolutions=2,
+                maximum_number_of_iterations=500,
+                image_pyramid_schedule=[2, 2, 1, 1]
             )
             for idx in range(len(raws_crop))
         ]
@@ -359,13 +372,15 @@ if __name__ == '__main__':
     raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
     pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
     target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
+    # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/sift/'
 
     amst_align(
         raw_folder=raw,
         pre_alignment_folder=pre,
         target_folder=target,
+        sift_pre_align=True,
+        sift_sigma=1.6,
         n_workers=12,
-        n_workers_elastix=1,
         n_workers_sift=1,
         sift_devicetype='GPU'
     )
