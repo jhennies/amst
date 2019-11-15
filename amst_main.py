@@ -366,12 +366,12 @@ def amst_align(
 
 if __name__ == '__main__':
 
-    # raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
-    # pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    # target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_00/'
-    raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
-    pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
+    raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
+    pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_01_fast_amst_test/'
+    # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
+    # pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    # target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
     # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/sift/'
 
     amst_align(

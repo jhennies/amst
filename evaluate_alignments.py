@@ -358,32 +358,80 @@ if __name__ == '__main__':
     ]
     z_range = np.s_[16:48]
 
-    print('imod2')
-    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/tm_ali_refined'
-    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_imod2.pkl'
-    if not os.path.isfile(target):
-        evaluate_alignment(
-            source_folder=source,
-            areas=areas,
-            n_workers=1,
-            target_filepath=target,
-            z_range=z_range,
-            plot=False,
-            sigma=1.6,
-            func=_evaluate_alignment_with_sift
-        )
-    plot_alignment_quality(
-        source_filepath=target,
-        multiple_plots=False,
-        ymin=-0.2, ymax=5, xmin=0, xmax=None,
-        pixel_size=[0.008, 5],
-        units=['um', 'nm']
-    )
-    statistics(target)
+    # print('imod2')
+    # source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/tm_ali_refined'
+    # target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_imod2.pkl'
+    # if not os.path.isfile(target):
+    #     evaluate_alignment(
+    #         source_folder=source,
+    #         areas=areas,
+    #         n_workers=1,
+    #         target_filepath=target,
+    #         z_range=z_range,
+    #         plot=False,
+    #         sigma=1.6,
+    #         func=_evaluate_alignment_with_sift
+    #     )
+    # plot_alignment_quality(
+    #     source_filepath=target,
+    #     multiple_plots=False,
+    #     ymin=-0.2, ymax=5, xmin=0, xmax=None,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm']
+    # )
+    # statistics(target)
+    #
+    # print('res2_it500_sift_from_old')
+    # source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_res2_it500_sift_from_old/'
+    # target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_fast_amst_res2_it500_sift_from_old.pkl'
+    # if not os.path.isfile(target):
+    #     evaluate_alignment(
+    #         source_folder=source,
+    #         areas=areas,
+    #         n_workers=1,
+    #         target_filepath=target,
+    #         z_range=z_range,
+    #         plot=False,
+    #         sigma=1.6,
+    #         func=_evaluate_alignment_with_sift
+    #     )
+    # plt.figure()
+    # plot_alignment_quality(
+    #     source_filepath=target,
+    #     multiple_plots=False,
+    #     ymin=-0.2, ymax=5, xmin=0, xmax=None,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm']
+    # )
+    # statistics(target)
+    #
+    # print('amst_aligned_res2')
+    # source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/amst_aligned_res2/'
+    # target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_amst_aligned_res2.pkl'
+    # if not os.path.isfile(target):
+    #     evaluate_alignment(
+    #         source_folder=source,
+    #         areas=areas,
+    #         n_workers=1,
+    #         target_filepath=target,
+    #         z_range=z_range,
+    #         plot=False,
+    #         sigma=1.6,
+    #         func=_evaluate_alignment_with_sift
+    #     )
+    # plt.figure()
+    # plot_alignment_quality(
+    #     source_filepath=target,
+    #     multiple_plots=False,
+    #     ymin=-0.2, ymax=5, xmin=0, xmax=None,
+    #     pixel_size=[0.008, 5],
+    #     units=['um', 'nm']
+    # )
+    # statistics(target)
 
-    print('res2_it500_sift_from_old')
-    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_res2_it500_sift_from_old/'
-    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_fast_amst_res2_it500_sift_from_old.pkl'
+    print('res2')
+    source = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_01_fast_amst_test/'
+    target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_01_fast_amst_test/offsets.pkl'
     if not os.path.isfile(target):
         evaluate_alignment(
             source_folder=source,
@@ -404,31 +452,6 @@ if __name__ == '__main__':
         units=['um', 'nm']
     )
     statistics(target)
-
-    print('amst_aligned_res2')
-    source = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/amst_aligned_res2/'
-    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/offsets_amst_aligned_res2.pkl'
-    if not os.path.isfile(target):
-        evaluate_alignment(
-            source_folder=source,
-            areas=areas,
-            n_workers=1,
-            target_filepath=target,
-            z_range=z_range,
-            plot=False,
-            sigma=1.6,
-            func=_evaluate_alignment_with_sift
-        )
-    plt.figure()
-    plot_alignment_quality(
-        source_filepath=target,
-        multiple_plots=False,
-        ymin=-0.2, ymax=5, xmin=0, xmax=None,
-        pixel_size=[0.008, 5],
-        units=['um', 'nm']
-    )
-    statistics(target)
-
 
     plt.show()
 
