@@ -212,6 +212,8 @@ def _register_with_elastix(fixed, moving,
                            maximum_number_of_iterations=None,
                            final_grid_spacing_in_physical_units=None,
                            image_pyramid_schedule=None,
+                           automatic_scales_estimation=None,
+                           automatic_transform_initialization=None,
                            name=None
                            ):
 
@@ -233,6 +235,10 @@ def _register_with_elastix(fixed, moving,
         params.FinalGridSpacingInPhysicalUnits = final_grid_spacing_in_physical_units
     if image_pyramid_schedule is not None:
         params.ImagePyramidSchedule = image_pyramid_schedule
+    if automatic_scales_estimation is not None:
+        params.AutomaticScalesEstimation = automatic_scales_estimation
+    if automatic_transform_initialization is not None:
+        params.AutomaticTransformInitialization = automatic_transform_initialization
     # Hard-coded as integers won't work
     params.ResultImagePixelType = "float"
 
@@ -341,9 +347,11 @@ def amst_align(
         raws_crop = [
             _register_with_elastix(
                 templates_med[idx], raws_crop[idx], name=names[idx],
-                number_of_resolutions=2,
+                number_of_resolutions=1,
                 maximum_number_of_iterations=500,
-                image_pyramid_schedule=[2, 2, 1, 1]
+                image_pyramid_schedule=[2, 2, 1, 1],
+                automatic_scales_estimation=False,
+                automatic_transform_initialization=False
             )
             for idx in range(len(raws_crop))
         ]
@@ -382,7 +390,7 @@ if __name__ == '__main__':
         pre_alignment_folder=pre,
         target_folder=target,
         sift_pre_align=True,
-        sift_sigma=None,
+        sift_sigma=0.5,
         n_workers=12,
         n_workers_sift=1,
         sift_devicetype='GPU'
