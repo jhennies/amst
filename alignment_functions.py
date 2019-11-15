@@ -129,8 +129,8 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
     if not connected_components:
         mode = 'no_crop'
 
-    if image_pyramid_schedule is None:
-        image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
+    # if image_pyramid_schedule is None:
+    #     image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
 
     filename = os.path.split(im_filepath)[1]
 
