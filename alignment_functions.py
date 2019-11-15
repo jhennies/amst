@@ -28,7 +28,12 @@ def _register_with_elastix(moving, ref,
 
     # FIXME: this should not be set like this by default
     if image_pyramid_schedule is None:
-        image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
+        if number_of_resolutions == 4:
+            image_pyramid_schedule = [8, 8, 4, 4, 2, 2, 1, 1]
+        elif number_of_resolutions == 2:
+            image_pyramid_schedule = [2, 2, 1, 1]
+        else:
+            raise NotImplementedError
 
     # Set the parameters. Pyelastix offers automatic and sensible defaults
     if transform == 'AffineTransform':
