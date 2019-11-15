@@ -7,6 +7,8 @@ from tifffile import imread, imsave
 from scipy.ndimage.interpolation import shift
 import pickle
 
+import gc
+
 from matplotlib import pyplot as plt
 
 import pyelastix
@@ -252,7 +254,7 @@ def elastix_align_advanced(target_folder, im_filepath, ref_im_filepath,
             pickle.dump(field, f)
 
 
-def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, subpixel_displacement=True):
+def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, subpixel_displacement=True, devicetype='CPU'):
     """
     This function is integrated to get the raw data close to the template with translations only and then run the
     elastix alignment on top.
@@ -294,7 +296,7 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
             warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
             
     # Align the image
-    sa = sift.LinearAlign(ref_im, devicetype='GPU')
+    sa = sift.LinearAlign(ref_im, devicetype=devicetype)
 
     try:
         aligned = sa.align(im, return_all=True, orsa=False, shift_only=shift_only)
@@ -317,8 +319,12 @@ def sift_align(target_folder, im_filepath, ref_im_filepath, shift_only=True, sub
 
     # FIXME For some reason I now get an OUT_OF_RESOURCES error
     # Do I have to dispose the sa?
-    # FIXME Does this work?
-    sa.free_buffers()
+    # # FIXME Does this work?
+    # for x in range(100):
+    #     sa.free_buffers()
+    #     sa.free_kernels()
+    #     gc.collect()
+    del sa
 
     # Write result
     imsave(os.path.join(target_folder, filename), result.astype(im.dtype))
@@ -335,6 +341,7 @@ def alignment_function_wrapper(func, source_folder, ref_source_folder, target_fo
 
     if n_workers == 1:
 
+        print('Running with one worker...')
         for idx in range(len(im_list)):
             func(
                 target_folder, im_list[idx], ref_im_list[idx], *args, **kwargs
