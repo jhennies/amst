@@ -333,7 +333,7 @@ def amst_align(
                 with Pool(processes=n_workers) as p:
                     tasks = [
                         p.apply_async(
-                            _displace_slice, (raws_crop[idx], offsets[idx], os.path.join(target_folder, 'sift', names[idx]))
+                            _displace_slice, (raws_crop[idx], offsets[idx])
                         )
                         for idx in range(len(raws_crop))
                     ]
@@ -347,11 +347,11 @@ def amst_align(
         raws_crop = [
             _register_with_elastix(
                 templates_med[idx], raws_crop[idx], name=names[idx],
-                number_of_resolutions=1,
-                maximum_number_of_iterations=500,
-                image_pyramid_schedule=[2, 2, 1, 1],
+                number_of_resolutions=10,
+                maximum_number_of_iterations=50,
+                image_pyramid_schedule=[8, 8, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1],
                 automatic_scales_estimation=False,
-                automatic_transform_initialization=False
+                automatic_transform_initialization=True
             )
             for idx in range(len(raws_crop))
         ]
@@ -377,12 +377,12 @@ def amst_align(
 
 if __name__ == '__main__':
 
-    raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
-    pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_01_fast_amst_test/'
-    # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
-    # pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    # target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
+    # raw = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit'
+    # pre = '/g/schwab/hennies/datasets/20140801_Hela-wt_xy5z8nm_AS/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    # target = '/g/schwab/hennies/phd_project/image_analysis/alignment/amst/amst_devel_20191115_00/'
+    raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
+    pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    target = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/fast_amst_test/'
     # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/sift/'
 
     amst_align(
