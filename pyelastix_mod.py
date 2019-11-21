@@ -1,9 +1,10 @@
 
 # The code in this file is adapted from almarklein's https://github.com/almarklein/pyelastix
+# The adaptations enable a use of an image mask (-fMask and -mMask arguments of elastix comand line inputs)
+# TODO Fork pyelastix repo and make pull request
 
 import numpy as np
 import os
-from skimage.morphology import opening, closing, disk
 
 from pyelastix import _write_image_data, get_tempdir, _clear_temp_dir, _compile_params, Parameters
 from pyelastix import _write_parameter_file, get_elastix_exes, _system3, _read_image_data
@@ -57,6 +58,8 @@ def register_with_mask(im1, im2, mask, params, exact_params=False, verbose=1):
         The moving image (the one to deform).
     * im2 (ndarray or file location):
         The static (reference) image.
+    * mask (ndarray or file location):
+        A mask to indicate a region of interest
     * params (dict or Parameters):
         The parameters of the registration. Default parameters can be
         obtained using the `get_default_params()` method. Note that any
