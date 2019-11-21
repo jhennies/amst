@@ -1,12 +1,12 @@
 
-from amst_main import amst_align, default_parameter_set
+from amst_main import amst_align, default_amst_params
 
 raw_folder = '/path/to/raw/data/'
 pre_alignment_folder = '/path/to/pre/alignment'
 target_folder = '/where/to/save/the/results'
 
 # Load the default parameters
-params = default_parameter_set()
+params = default_amst_params()
 params['n_workers'] = 12  # The default number of CPU cores is 8; set this to the number that is available
 
 amst_align(

@@ -206,7 +206,7 @@ def optimized_elastix_params():
     return params
 
 
-def default_parameter_set():
+def default_amst_params():
 
     return dict(
         median_radius=7,         # radius of the median smoothing surrounding
@@ -669,7 +669,7 @@ if __name__ == '__main__':
         experiment_name
     )
 
-    params = default_parameter_set()
+    params = default_amst_params()
 
     params['n_workers'] = 12
     # For debugging
