@@ -1,4 +1,12 @@
 
+# Copy this script to a desired location
+# E.g., if AMST was cloned to /home/user/src/amst make a home/user/src/amst_experiments folder for the execution scripts
+
+import sys
+# Append the location of the amst package to the system path. Replace by the proper location, e.g. '/home/user/src/amst'
+# for the example above
+sys.path.append('/path/to/amst/')
+
 from amst_main import amst_align, default_amst_params
 
 raw_folder = '/path/to/raw/data/'
