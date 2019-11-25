@@ -258,7 +258,7 @@ def pre_processing_generator(
                     # Return Nones for each slice that was already computed
                     if verbose:
                         print('{} already exists, nothing to do...'.format(os.path.split(im_list_raw[idx])[1]))
-                    return None, None, None, None, None
+                    return None, None, None, None
             # Load the raw data slice
             im = imread(im_list_raw[idx])
             assert im.dtype in ['uint8', 'uint16'], 'Only the data types uint8 and uint16 are supported!'
@@ -267,7 +267,7 @@ def pre_processing_generator(
             # Return Nones for each missing slice to fill up the batch
             if verbose:
                 print('Filling up batch...')
-            return None, None, None, None, None
+            return None, None, None, None
 
         # Start end end indices for the median filter, idx being the current slice position in the center
         start_id = idx - median_radius
@@ -565,7 +565,9 @@ def amst_align(
                                  if task is not None else None
                                  for task in tasks]
             else:
-                raws_crop = [_displace_slice(raws_crop[idx], offsets[idx]) for idx in range(len(raws_crop))]
+                raws_crop = [_displace_slice(raws_crop[idx], offsets[idx])
+                             if raws_crop[idx] is not None else None
+                             for idx in range(len(raws_crop))]
 
         if write_intermediates:
             # Write the sift images in parallel
