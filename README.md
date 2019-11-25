@@ -99,17 +99,29 @@ Additionally, check the potential issues specified below.
 
 An example usage can be found in example_hela_dataset.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
-Open a command line and navigate to the amst_package
+Open a command line and create a new folder for experiment scripts
 
-    cd /path/to/amst/
+For example:
+
+    mkdir ~/src/amst_experiments
+    cd amst_experiments
     
+Copy the example script to the new folder
+
+    cp ~/src/amst/example_usage.py my_first_amst_experiment.py
+    
+Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder. 
+The parent folder of the target folder has to exist in your file system. If not, create it
+
+    mkdir /path/to/target/folder 
+        
 Acivate the conda environment
 
     conda activate amst_env
     
 Run the script
 
-    python example_hela_dataset.py 
+    python my_first_amst_experiment.py 
 
 ## Known errors and issues
 
