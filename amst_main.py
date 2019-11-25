@@ -10,11 +10,8 @@ from multiprocessing import Pool
 from vigra import gaussianSmoothing
 from silx.image import sift
 from scipy.ndimage.interpolation import shift
-from skimage.transform import downscale_local_mean, resize
+from skimage.transform import downscale_local_mean
 import pyelastix
-import pyelastix_mod
-
-from skimage.morphology import disk, closing
 
 
 # To check which device the SIFT runs on
@@ -211,22 +208,6 @@ def default_amst_params():
     return dict(
         median_radius=7,         # radius of the median smoothing surrounding
         elastix_params=optimized_elastix_params(),
-        elastix_generate_mask=dict(
-            # A mask is generated with the following algorithm:
-            #    1. Downsample the data
-            #    2. Threshold the result
-            #    3. Morphological closing to fill small gaps
-            #    4. Upsample to the initial size
-            on_smooth=True,      # mask on smoothed version
-            downscale=(16, 16),  # especially for larger data slices it makes sense to downscale the data to compute the
-                                 #     mask. This speeds up computation without compromizing the result
-            thresh=None,         # threshold
-            rel_thresh=0.25,     # relative threshold depending on the data type
-                                 #     Examples: rel_thresh=0.25, data bit depth is 8bit => thresh = 64
-                                 #               rel_thresh=0.25, data bit depth is 16bit => thresh = 16384
-                                 #     Note that rel_thresh overwrites thresh if both parameters are specified!
-            close=5            # size of struct elem for closing
-        ),
         sift_pre_align=True,     # Use SIFT to get the raw data close to the template
         sift_sigma=1.6,          # Pre-smooth data before running the SIFT
         sift_downsample=(2, 2),  # Downsample the data for the SIFT (for speed-up, downsampling by 2 should not
@@ -242,7 +223,6 @@ def pre_processing_generator(
         raw_folder,
         pre_alignment_folder,
         median_radius=7,
-        generate_fixed_mask=None,
         sift_sigma=1.6,
         sift_downsample=None,
         n_workers=8,
@@ -266,38 +246,7 @@ def pre_processing_generator(
                        top_left[1]:bottom_right[1] + 1]  # inclusive
         return bounds
 
-    def _generate_mask_from_image(
-            im,
-            on_smooth=True,  # mask on smoothed version
-            downscale=(16, 16),
-            # especially for larger data slices it makes sense to downscale the data to compute the
-            #     mask. This speeds up computation without compromizing the result
-            thresh=None,  # threshold
-            rel_thresh=0.25,  # relative threshold depending on the data type
-            #     Examples: rel_thresh=0.25, data bit depth is 8bit => thresh = 64
-            #               rel_thresh=0.25, data bit depth is 16bit => thresh = 16384
-            #     Note that rel_thresh overwrites thresh if both parameters are specified!
-            close=5  # size of struct elem for closing
-    ):
-
-        if rel_thresh is not None:
-            if im.dtype == 'uint8':
-                thresh = 2 ** 8 * rel_thresh
-            elif im.dtype == 'uint16':
-                thresh = 2 ** 16 * rel_thresh
-            else:
-                raise NotImplementedError
-
-        t_im = downscale_local_mean(im, downscale)
-        tmask = np.zeros(t_im.shape, dtype='uint8')
-        tmask[t_im > thresh] = 1
-        if close is not None:
-            selem = disk(close)
-            tmask = closing(tmask, selem)
-        mask = np.zeros(im.shape, 'uint8')
-        mask[resize(tmask, im.shape) > 0] = 1
-
-    def _prepare_data(idx, batch_idx, generate_mask=None):
+    def _prepare_data(idx, batch_idx):
 
         # --------------------------------------------------------------------------------------------------------------
         # Preparation of the image data
@@ -312,6 +261,7 @@ def pre_processing_generator(
                     return None, None, None, None, None
             # Load the raw data slice
             im = imread(im_list_raw[idx])
+            assert im.dtype in ['uint8', 'uint16'], 'Only the data types uint8 and uint16 are supported!'
         else:
             # This happens if the number of images does not divide by the number of batches (smaller last batch)
             # Return Nones for each missing slice to fill up the batch
@@ -323,13 +273,14 @@ def pre_processing_generator(
         start_id = idx - median_radius
         end_id = idx + median_radius + 1
 
-        # Load the necessary data for both the current slice and the z-median filtered slice
+        # Load the necessary data for the z-median filtered slice
         for load_idx, slice_idx in enumerate(range(start_id, end_id)):
             load_idx += idx - batch_idx
             # print('load_idx = {}; slice_idx = {}'.format(load_idx, slice_idx))
             if 0 <= slice_idx < len(im_list_pre):
                 if template_data[load_idx] is None:
                     template_data[load_idx] = imread(im_list_pre[slice_idx])
+                    assert template_data[load_idx].dtype == 'uint8', 'Only 8bit template data is supported!'
             # else:
                 #     print('Template data is not None')
             # else:
@@ -359,30 +310,32 @@ def pre_processing_generator(
         # Gaussian smooth the image and the median_z for the SIFT step
         if sift_sigma is not None:
             median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
-            im_smooth = gaussianSmoothing(im, sift_sigma)
+            if im.dtype == 'uint8':
+                im_smooth = gaussianSmoothing(im, sift_sigma)
+            else:
+                # vigra.gaussianSmoothing cannot handle 16 bit data
+                im_smooth = gaussianSmoothing(im.astype('float32'), sift_sigma)
+                # The data for the sift step does not require to be 16 bit
+                im_smooth = (im_smooth / (2 ** 16) * (2 ** 8)).astype('uint8')
         else:
             median_z_smooth = median_z.copy()
             im_smooth = im.copy()
+            if im_smooth.dtype == 'uint16':
+                # The data for the sift step does not require to be 16 bit
+                im_smooth = (im_smooth.astype('float32') / (2 ** 16) * (2 ** 8)).astype('uint8')
 
         # Downsample for SIFT step for speed-up of computation
         if sift_downsample is not None:
             median_z_smooth = downscale_local_mean(median_z_smooth, sift_downsample).astype('uint8')
             im_smooth = downscale_local_mean(im_smooth, sift_downsample).astype('uint8')
 
-        # Generate a sensible mask for the elastix re-alignment step
-        if generate_mask is not None:
-
-            if generate_mask['on_smooth']:
-                mask = _generate_mask_from_image(median_z_smooth, **generate_mask)
-            else:
-                mask = _generate_mask_from_image(median_z, **generate_mask)
-
-        else:
-            mask = None
-
         # --------------------------------------------------------------------------------------------------------------
         # Return the results
-        return im, im_smooth, median_z, median_z_smooth, mask
+        assert im.dtype in ['uint8', 'uint16']
+        assert im_smooth.dtype == 'uint8'
+        assert median_z.dtype == 'uint8'
+        assert median_z_smooth.dtype == 'uint8'
+        return im, im_smooth, median_z, median_z_smooth
         # --------------------------------------------------------------------------------------------------------------
 
     # __________________________________________________________________________________________________________________
@@ -412,7 +365,7 @@ def pre_processing_generator(
                 tasks = [
                     tpe.submit(
                         _prepare_data,
-                        *(idx, batch_idx, generate_fixed_mask)
+                        *(idx, batch_idx)
                     )
                     for idx in range(batch_idx, batch_idx + n_workers)
                 ]
@@ -421,11 +374,11 @@ def pre_processing_generator(
 
         else:
             prepared_data = [
-                _prepare_data(idx, batch_idx, generate_fixed_mask)
+                _prepare_data(idx, batch_idx)
                 for idx in range(batch_idx, batch_idx + n_workers)
             ]
         # prepared_data contains a list for every loaded slice including raw data, raw_data for the sift,
-        # median z-smoothed data, median z-smoothed data for the sift, and a mask for registration by Elastix
+        # median z-smoothed data, and median z-smoothed data for the sift
 
         # This now needs to be reshaped properly
         prepared_data = np.swapaxes(np.array(prepared_data), 0, 1)
@@ -433,7 +386,6 @@ def pre_processing_generator(
         raw_crop_smooth = prepared_data[1].tolist()
         templates_med = prepared_data[2].tolist()
         templates_med_smooth = prepared_data[3].tolist()
-        masks = prepared_data[4].tolist()
 
         # Determine file names (to later save the results with the same filename
         names = [os.path.split(im_list_raw[idx])[1]
@@ -441,7 +393,7 @@ def pre_processing_generator(
                  for idx in range(batch_idx, batch_idx + n_workers)]
 
         # Yield the batch
-        yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, masks, names
+        yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, names
 
 
 def _sift_on_pair(fixed, moving, devicetype, verbose=False):
@@ -481,7 +433,7 @@ def _displace_slice(image, offset, result_filepath=None):
     return image
 
 
-def _register_with_elastix(fixed, moving, mask=None,
+def _register_with_elastix(fixed, moving,
                            transform='AffineTransform',
                            elastix_params=None,
                            name=None,
@@ -505,20 +457,11 @@ def _register_with_elastix(fixed, moving, mask=None,
     params.ResultImagePixelType = "float"
 
     # The registration
-    if mask is not None:
-        result, _ = pyelastix_mod.register_with_mask(
-            np.array(moving).astype('float32'),
-            np.array(fixed).astype('float32'),
-            np.array(mask).astype('uint8'),
-            params,
-            verbose=0
-        )
-    else:
-        result, _ = pyelastix.register(
-            np.array(moving).astype('float32'),
-            np.array(fixed).astype('float32'), params,
-            verbose=0
-        )
+    result, _ = pyelastix.register(
+        np.array(moving).astype('float32'),
+        np.array(fixed).astype('float32'), params,
+        verbose=0
+    )
 
     # The result is read only when it comes out of pyelastix -- copying and replacing fixes that
     result = result.copy()
@@ -547,7 +490,6 @@ def amst_align(
         target_folder,
         median_radius=7,
         elastix_params=None,
-        elastix_generate_mask=None,
         sift_pre_align=True,
         sift_sigma=None,
         sift_downsample=None,
@@ -555,19 +497,24 @@ def amst_align(
         n_workers_sift=1,
         sift_devicetype='GPU',
         compute_range=np.s_[:],
-        verbose=False
+        verbose=False,
+        write_intermediates=False
 ):
 
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
+    if write_intermediates:
+        if not os.path.exists(os.path.join(target_folder, 'sift')):
+            os.mkdir(os.path.join(target_folder, 'sift'))
+        if not os.path.exists(os.path.join(target_folder, 'refs')):
+            os.mkdir(os.path.join(target_folder, 'refs'))
 
     # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
     # The slices in each batch of data are generated in parallel
-    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, masks, names in pre_processing_generator(
+    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names in pre_processing_generator(
             raw_folder,
             pre_alignment_folder,
             median_radius=median_radius,
-            generate_fixed_mask=elastix_generate_mask,
             sift_sigma=sift_sigma,
             sift_downsample=sift_downsample,
             n_workers=n_workers,
@@ -620,10 +567,52 @@ def amst_align(
             else:
                 raws_crop = [_displace_slice(raws_crop[idx], offsets[idx]) for idx in range(len(raws_crop))]
 
+        if write_intermediates:
+            # Write the sift images in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _write_result, (
+                                os.path.join(target_folder, 'sift', names[idx]), raws_crop[idx]
+                            )
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(raws_crop))
+                    ]
+                    [task.get()
+                     if task is not None else None
+                     for task in tasks]
+            else:
+                [_write_result(os.path.join(target_folder, 'sift', names[idx]), raws_crop[idx])
+                 if raws_crop[idx] is not None else None
+                 for idx in range(len(raws_crop))
+                 ]
+            # Write template images in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _write_result, (
+                                os.path.join(target_folder, 'refs', names[idx]), templates_med[idx]
+                            )
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(raws_crop))
+                    ]
+                    [task.get()
+                     if task is not None else None
+                     for task in tasks]
+            else:
+                [_write_result(os.path.join(target_folder, 'refs', names[idx]), templates_med[idx])
+                 if raws_crop[idx] is not None else None
+                 for idx in range(len(raws_crop))
+                 ]
+
         # Register with ELASTIX with one thread, as it is parallelized internally
         raws_crop = [
             _register_with_elastix(
-                templates_med[idx], raws_crop[idx], mask=masks[idx], name=names[idx],
+                templates_med[idx], raws_crop[idx], name=names[idx],
                 elastix_params=elastix_params, verbose=verbose
             )
             if raws_crop[idx] is not None else None
