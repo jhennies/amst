@@ -3,6 +3,26 @@ Alignment to Median Smoothed Template for FIB-SEM data
 
 ## Installation of AMST
 
+### Download the source code
+
+Clone this repository to a folder of your choice.
+
+Create parent folder, for example:
+
+    cd ~ 
+    mkdir src
+    
+Navigate to this folder:
+
+    cd ~/src
+    
+Clone this repository
+
+    git clone https://github.com/jhennies/amst.git
+
+The AMST package will now reside in /home/user/src/amst. For convenience the following instructions assume this location. 
+In case you cloned the git elsewhere adapt the respective instructions accordingly.
+
 ### Installation of Elastix
 
 Please also refer to the exlastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl/doxygen/index.html
@@ -34,6 +54,24 @@ for python3.7 and install it to the folder of your choice.
 
 ### Set up the conda environment
 
+#### With environment file
+
+Open a terminal/command line and navigate to the AMST package:
+
+    cd /home/user/src/amst 
+
+For Linux, type:
+
+    conda env create --file amst_env_linux.yml
+    
+For Windows, type:
+
+    conda env create --file amst_env_windows.yml
+    
+Please check for below for potential issues.
+
+#### Manually
+
 Open a terminal/command line and follow the commands below.
 
 Create an new environment:
@@ -56,6 +94,7 @@ Install required packages:
 
 Additionally, check the potential issues specified below. 
 
+
 ## Usage
 
 An example usage can be found in example_hela_dataset.py showing the basic functionalities of AMST.
@@ -76,7 +115,7 @@ Run the script
 
 ### 1. pyopencl._cl.LogicError: clGetPlatformIDs failed: PLATFORM_NOT_FOUND_KHR
 
-OpenCl cannot find the proper drivers. This affects the SIFT alignment step which gets the raw close to the template before running Elastix.
+OpenCL cannot find the proper drivers. This affects the SIFT alignment step which gets the raw close to the template before running Elastix.
 
 To get the GPU working on Linux, copy the graphics vendors (e.g. Nvidia.icd) from 
     
@@ -93,9 +132,12 @@ Alternatively, to get the SIFT running at least on the CPU:
 In the conda evironment install:
 
     conda install -c conda-forge pocl
+
+### 2. self.ctx = ocl.create_context(devicetype=devicetype, AttributeError: 'NoneType' object has no attribute 'create_context'
+
+This has, so far, only occured on Windows machines. Similar to 1., OpenCL cannot be instantiated. We were able to fix this by renaming the OpenCL.dll in C:\Windows\System32\ to, e.g., OpenCL.dll.bak.
     
-    
-### 2. RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
+### 3. RuntimeError: An error occured during registration: [Errno 2] No such file or directory: '/tmp/pyelastix/id_25994_140493512837272/result.0.mhd'
 
 This is a reported bug in the pyelastix package (which does not affect Windows, apparently). To fix it, do the following:
 
@@ -111,7 +153,7 @@ to
 
 Also see https://github.com/almarklein/pyelastix/pull/8
     
-### 3. Result data seems all-zero 
+### 4. Result data seems all-zero 
 
 There seems to be some debug code left in the pyelastix package.
 Check line 558 in /path/to/miniconda3/envs/amst_env_devel/lib/python3.6/site-packages/pyelastix.py. If it is 
