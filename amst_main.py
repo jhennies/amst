@@ -345,8 +345,17 @@ def pre_processing_generator(
     # __________________________________________________________________________________________________________________
     # Main loop which yields the batches of data
 
+    # Assert that the input folders actually exist
+    assert os.path.exists(raw_folder), 'The raw folder does not exist. \nEnsure the raw_folder input points to the correct location.'
+    assert os.path.exists(pre_alignment_folder), 'The folder for the pre-alignment does not exist. \nEnsure the pre_alignment_folder input points to the correct location.'
+
+    # Find the tif files in the respective directories for the raw data and the pre-alignment
     im_list_raw = np.sort(glob(os.path.join(raw_folder, '*.tif')))[compute_range]
     im_list_pre = np.sort(glob(os.path.join(pre_alignment_folder, '*.tif')))[compute_range]
+
+    # Some assertions here to ensure the folders actually contain tif files
+    assert im_list_raw != [], 'The raw folder does not contain *.tif files. \nEnsure the raw_folder input points to the correct location.'
+    assert im_list_pre != [], 'The folder for the pre-alignment does not contain *.tif files. \nEnsure the pre_alignment_folder input points to the correct location.'
 
     for batch_idx in range(0, len(im_list_raw), n_workers):
 

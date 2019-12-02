@@ -199,7 +199,7 @@ To obtain the defaults above, you can use the default_amst_params() function fro
         **params
     )
 
-To modify single parameters we recommend to fetch the defaults and adapt as desired, like so:
+To modify parameters we recommend to fetch the defaults and adapt as desired, like so:
 
     params = default_amst_params()
     params['n_workers'] = 12
@@ -254,7 +254,7 @@ The changes we introduced to the default settings are:
     # locations are possible in this setting. Affects alignment quality
     ImageSampler='RandomCoordinate'  # default='Random'
 
-To modify single Elastix parameters for AMST we recommend to fetch AMST defaults and then modify as desired:
+To modify Elastix parameters for AMST we recommend to fetch AMST defaults and then modify as desired:
 
     params = default_amst_params()
     params['elastix_params']['MaximumNumberOfIterations'] = 500
