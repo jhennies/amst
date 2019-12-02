@@ -127,7 +127,7 @@ Run the script
 
 ### Main parameters
 
-The main parameters are supplied arguments to the amst_align() function.
+The main parameters are supplied as arguments to the amst_align() function.
 
     amst_align(
     
