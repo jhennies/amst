@@ -35,23 +35,20 @@ Alternatively, if you are planning on using python later use https://www.anacond
 
 ### Set up the conda environment
 
-#### With environment file
+#### With environment file 
 
 Open a terminal/command line and navigate to the AMST package:
 
     cd /home/user/src/amst 
 
+For Windows, installing the wheel will install the dependencies. Then jump to create environment manually.
+
 For Linux, type:
 
     conda env create --file amst_env_linux.yml
-    
-For Windows, type:
 
-    conda env create --file amst_env_windows.yml
-    
-Please check for below for potential issues.
 
-#### Manually
+#### Creating environment manually
 
 Open a terminal/command line and follow the commands below.
 
@@ -59,7 +56,7 @@ Create an new environment:
 
     conda create --name amst_env python=3.6
 
-Activate it:
+#### Activate your environment:
 
     conda activate amst_env
     
