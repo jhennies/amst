@@ -97,7 +97,7 @@ Additionally, check the potential issues specified below.
 
 ## Usage
 
-An example usage can be found in example_hela_dataset.py showing the basic functionalities of AMST.
+An example usage can be found in example_usage.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
 Open a command line and create a new folder for experiment scripts
 
@@ -122,6 +122,144 @@ Acivate the conda environment
 Run the script
 
     python my_first_amst_experiment.py 
+
+## Parameters
+
+### Main parameters
+
+The main parameters are supplied arguments to the amst_align() function.
+
+    amst_align(
+    
+Specify where to load data and save the results
+        
+        # Raw data
+        raw_folder,
+           
+        # The pre-aligned data       
+        pre_alignment_folder,   
+        
+        # Where results are saved; This folder will be created if it does not exist
+        # However, the parent folder has to exist, we purposely avoided recursive folder creation
+        target_folder,
+                                
+Settings of the amst algorithm
+        
+        # radius of the median smoothing surrounding
+        median_radius=7,        
+        
+        # Parameters for the affine transformation step using Elastix; see below for more details
+        elastix_params=optimized_elastix_params(),
+        
+        # Use SIFT to get the raw data close to the template
+        sift_pre_align=True,     
+        
+        # Pre-smooth data before running the SIFT
+        sift_sigma=1.6,   
+        
+        # Downsample the data for the SIFT (for speed-up, downsampling by 2 should not compromize the final result    
+        sift_downsample=(2, 2),   
+
+Computational settings
+        
+        # Number of CPU cores allocated
+        n_workers=8,
+        
+        # Number of threads for the SIFT step (must be 1 if run on the GPU)
+        n_workers_sift=1, 
+        
+        # Run the SIFT on 'GPU' or 'CPU'
+        sift_devicetype='GPU',
+        
+        # Select a subset of the data for alignment (good for parameter testing)
+        # To align only the first 100 slices of a dataset use
+        # compute_range=np.s_[:100]
+        # Note: for this to work you have to import numpy as np
+        compute_range=np.s_[:]
+        
+    )
+
+To obtain the defaults above, you can use the default_amst_params() function from amst_main.py which returns a dictionary to enable the following usage:
+
+    params = default_amst_params()
+    
+    amst_align(
+        raw_folder,
+        pre_alignment_folder,
+        target_folder,
+        **params
+    )
+
+To modify single parameters we recommend to fetch the defaults and adapt as desired, like so:
+
+    params = default_amst_params()
+    params['n_workers'] = 12
+    
+    amst_align(
+        raw_folder,
+        pre_alignment_folder,
+        target_folder,
+        **params
+    )
+
+### Elastix parameters
+
+We tested and optimized Elastix parameter settings specifically for the use of AMST. 
+The basis for our optimized Elastix parameters are the default Elastix parameters for affine transformations which can be found here:
+
+http://elastix.bigr.nl/wiki/images/c/c5/Parameters_Affine.txt
+
+These default parameter settings can be obtained as dictionary by running: 
+    
+    from amst_main import default_elastix_params
+    
+    elastix_defaults = default_elastix_params() 
+
+The optimized parameter settings can be obtained by:
+
+    from amst_main import optimized_elastix_params
+    
+    elastix_optimized = optimized_elastix_params()
+    
+The optimized parameter set is implemented in the default_amst_params() (see above).
+
+The changes we introduced to the default settings are:
+
+    # For speed-up we compromise one resolution level
+    NumberOfResolutions=3,  # default=4
+    
+    # Still, it make sense to start down-sampling by 8 and end with no sampling
+    ImagePyramidSchedule=[8, 8, 3, 3, 1, 1],  # default=(8, 8, 4, 4, 2, 2, 1, 1)
+    
+    # A slight speed-up, while still maintaining quality
+    MaximumNumberOfIterations=200,  # default=250
+    
+    # For some reason turning this off really improves the result
+    AutomaticScalesEstimation=False,  # default=True
+    
+    # Increased step length for low resolution iterations makes it converge faster (enables smaller number of
+    # resolutions and iterations, i.e. speed-up of computation)
+    MaximumStepLength=[4, 2, 1],  # default=1.
+    
+    # Similar to the default parameter "Random", a subset of locations is selected randomly. However, subpixel
+    # locations are possible in this setting. Affects alignment quality
+    ImageSampler='RandomCoordinate'  # default='Random'
+
+To modify single Elastix parameters for AMST we recommend to fetch AMST defaults and then modify as desired:
+
+    params = default_amst_params()
+    params['elastix_params']['MaximumNumberOfIterations'] = 500
+    
+    amst_align(
+        raw_folder,
+        pre_alignment_folder,
+        target_folder,
+        **params
+    )
+    
+For details on the Elastix parameters, please also refer to the Elastix manual available here:
+
+http://elastix.isi.uu.nl/download/elastix-5.0.0-manual.pdf
 
 ## Known errors and issues
 
