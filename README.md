@@ -60,7 +60,7 @@ Create an new environment:
 
     conda activate amst_env
     
-##  INSTALLATION ON WINDOWS
+##  Installation on Windows
 
 - Starting from the console where you activated your amst_env in conda move to the directory you downloaded amst, then to the directory amst_win 
 - Execute: 
@@ -84,7 +84,7 @@ Create an new environment:
 
 If everything went well, it will start.
 
-## INSTALLATION ON LINUX
+## Installation on Linux
 
 From the command line install required packages:
 
@@ -125,7 +125,7 @@ Calling elastix from command line should now work, e.g.:
 Please also refer to the elastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl
 
 
-## Usage (both WINDOWS and LINUX)
+## Usage (both Windows and Linux)
 
 An example usage can be found in example_usage.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
@@ -156,7 +156,7 @@ Run the script
 
 Additionally, check below "Known errors and issues" in case of any potential issues. 
 
-## Parameters
+## Parameters (OPTIONAL)
 
 ### Main parameters
 
