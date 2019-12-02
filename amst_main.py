@@ -357,6 +357,11 @@ def pre_processing_generator(
     assert im_list_raw != [], 'The raw folder does not contain *.tif files. \nEnsure the raw_folder input points to the correct location.'
     assert im_list_pre != [], 'The folder for the pre-alignment does not contain *.tif files. \nEnsure the pre_alignment_folder input points to the correct location.'
 
+    # Warning for different numbers of tif slices in raw and pre-align folders
+    if len(im_list_raw) != len(im_list_pre):
+        warnings.warn('Number of slices in the raw and pre-alignment folders do not match. \n'
+                      'This is not necessarily an error but indicates that you might want to consider revising your inputs.')
+
     for batch_idx in range(0, len(im_list_raw), n_workers):
 
         print('batch_idx = {}'.format(batch_idx))
