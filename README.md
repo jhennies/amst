@@ -84,7 +84,7 @@ Create an new environment:
 
 If everything went well, it will start.
 
-## INSTALLATION IN LINUX
+## INSTALLATION ON LINUX
 
 From the command line install required packages:
 
