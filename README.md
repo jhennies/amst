@@ -171,11 +171,20 @@ Computational settings
         # Run the SIFT on 'GPU' or 'CPU'
         sift_devicetype='GPU',
         
+Settings for debug and testing
+
         # Select a subset of the data for alignment (good for parameter testing)
         # To align only the first 100 slices of a dataset use
         # compute_range=np.s_[:100]
         # Note: for this to work you have to import numpy as np
         compute_range=np.s_[:]
+        
+        # Set to True for a more detailed console output
+        verbose=False,
+        
+        # Set to True to also write the median smoothed template and the results of the SIFT step to disk
+        # Two folders will be created within the specified target directory that contain this data ('refs' and 'sift').
+        write_intermediates=False
         
     )
 

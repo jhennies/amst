@@ -215,7 +215,11 @@ def default_amst_params():
         n_workers=8,             # Number of CPU cores allocated
         n_workers_sift=1,        # Number of threads for the SIFT step (must be 1 if run on the GPU)
         sift_devicetype='GPU',   # Run the SIFT on GPU or CPU
-        compute_range=np.s_[:]   # Select a subset of the data for alignment (good for parameter testing)
+        compute_range=np.s_[:],  # Select a subset of the data for alignment (good for parameter testing)
+        verbose=False,           # Set to True for a more detailed console output
+        write_intermediates=False  # Set to True to also write the median smoothed template and the results of the SIFT
+                                 # step to disk; two folders will be created within the specified target directory that
+                                 # contain this data ('refs' and 'sift')
     )
 
 
