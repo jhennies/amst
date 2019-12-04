@@ -355,7 +355,7 @@ Check line 558 in /path/to/miniconda3/envs/amst_env_devel/lib/python3.6/site-pac
 delete the line.
 
 
-#### 4. Problems with module 'Module not found error'
+### 5. Problems with module 'Module not found error'
 In some occasions is not possible to download a package properly from conda or pip. If that is the case, download the corresponding
 wheel from a different repository. For example, you can use the wheels from Christoph Golke page, for example, for Vigra:
 https://www.lfd.uci.edu/~gohlke/pythonlibs/#vigra
