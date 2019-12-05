@@ -45,7 +45,7 @@ Create a new environment:
 
 #### Activate your environment:
 
-    conda activate amst_envFrom the command line install required packages:
+    conda activate amst_env
 
 #### Install packages:
 
@@ -108,7 +108,6 @@ For the next steps, make sure the amst_env is activated (see above).
     Then again:
         pip install amst_bin_win-(press tab to autocomplete)
 
-    
 - Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__
 - Execute :
     python example_usage.py
@@ -157,6 +156,7 @@ Copy the example script to the new folder
     cp ~/src/amst/example_usage.py my_first_amst_experiment.py
     
 Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder. 
+(Note for Windows: Use double back-slashes for path names, e.g. "C:\\path\\to\\your\\data")
 The parent folder of the target folder has to exist in your file system. If not, create it
 
     mkdir /path/to/target/folder 
