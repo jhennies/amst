@@ -24,18 +24,42 @@ The AMST package will now reside in /home/user/src/amst. For convenience the fol
 In case you cloned the git elsewhere adapt the respective instructions accordingly.
 
 
-## Installing Miniconda or Anaconda 
+### Installing Miniconda or Anaconda 
  
- Note: if you already have a conda python installation, jump to the next step and set up a new conda environment.
+Note: if you already have a conda python installation, jump to the next step and set up a new conda environment.
 
 Download miniconda (lightweight version of Anaconda) from https://docs.conda.io/en/latest/miniconda.html
 for python3.7 and install it to the folder of your choice.
 
 Alternatively, if you are planning on using python later use https://www.anaconda.com/distribution/
 
-### Set up the conda environment
+### Manual installation on Linux
 
-#### With environment file 
+#### Creating environment manually
+
+Open a terminal/command line and follow the commands below.
+
+Create a new environment:
+
+    conda create --name amst_env python=3.6
+
+#### Activate your environment:
+
+    conda activate amst_envFrom the command line install required packages:
+
+#### Install packages:
+
+    conda install numpy
+    conda install -c conda-forge tifffile
+    conda install scikit-image
+    conda install -c conda-forge vigra
+    pip install pyelastix
+    conda install -c conda-forge silx[full]
+    conda install -c conda-forge pyopencl
+
+Additionally, check the potential issues specified below. 
+
+### Installation on linux with environment file 
 
 Open a terminal/command line and navigate to the AMST package:
 
@@ -47,25 +71,32 @@ For Linux, type:
 
     conda env create --file amst_env_linux.yml
 
+###  Installation on Windows
 
-#### Creating environment manually
+#### Create new conda environment 
 
 Open a terminal/command line and follow the commands below.
 
-Create an new environment:
+Create a new environment:
 
     conda create --name amst_env python=3.6
 
 #### Activate your environment:
 
     conda activate amst_env
-    
-##  Installation on Windows
 
-- Starting from the console where you activated your amst_env in conda move to the directory you downloaded amst, then to the directory amst_win 
+#### Installation of packages:
+
+- Open a command line and navigate to the directory where you cloned amst and into the sub-folder amst_win, e.g.
+
+    cd C:\users\username\src\amst\amst_win
+    
+For the next steps, make sure the amst_env is activated (see above).
+
 - Execute: 
-  
+
     pip install vigranumpy-(press tab to autocomplete)
+    
 - Execute:
 
     pip install amst_bin_win-(press tab to autocomplete)
@@ -83,21 +114,6 @@ Create an new environment:
     python example_usage.py
 
 If everything went well, it will start.
-
-## Installation on Linux
-
-From the command line install required packages:
-
-    conda install numpy
-    conda install -c conda-forge tifffile
-    conda install scikit-image
-    conda install -c conda-forge vigra
-    pip install pyelastix
-    conda install -c conda-forge silx[full]
-    conda install -c conda-forge pyopencl
-
-Additionally, check the potential issues specified below. 
-
 
 ### Installation of Elastix
 
