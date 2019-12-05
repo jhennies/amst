@@ -156,7 +156,7 @@ Copy the example script to the new folder
     cp ~/src/amst/example_usage.py my_first_amst_experiment.py
     
 Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder. 
-(Note for Windows: Use double back-slashes for path names, e.g. "C:\\path\\to\\your\\data")
+(Note for Windows: Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data")
 The parent folder of the target folder has to exist in your file system. If not, create it
 
     mkdir /path/to/target/folder 
