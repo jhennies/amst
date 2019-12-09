@@ -190,7 +190,7 @@ def optimized_elastix_params():
         # resolutions and iterations, i.e. speed-up of computation)
         MaximumStepLength=[4, 2, 1],
         # Similar to the default parameter "Random", a subset of locations is selected randomly. However, subpixel
-        # locations are possible in this setting. Affects alignment quality
+        # locations are possible in this setting. Improves alignment quality, but also increases runtime!
         ImageSampler='RandomCoordinate'
     )
 
