@@ -1,7 +1,7 @@
 # AMST
 Alignment to Median Smoothed Template for FIB-SEM data
 
-## Installation of AMST
+## Installation of AMST 
 
 ### Download the source code
 
@@ -23,13 +23,103 @@ Clone this repository
 The AMST package will now reside in /home/user/src/amst. For convenience the following instructions assume this location. 
 In case you cloned the git elsewhere adapt the respective instructions accordingly.
 
+
+### Installing Miniconda or Anaconda 
+ 
+Note: if you already have a conda python installation, jump to the next step and set up a new conda environment.
+
+Download miniconda (lightweight version of Anaconda) from https://docs.conda.io/en/latest/miniconda.html
+for python3.7 and install it to the folder of your choice.
+
+Alternatively, if you are planning on using python later use https://www.anaconda.com/distribution/
+
+### Manual installation on Linux
+
+#### Creating environment manually
+
+Open a terminal/command line and follow the commands below.
+
+Create a new environment:
+
+    conda create --name amst_env python=3.6
+
+#### Activate your environment:
+
+    conda activate amst_env
+
+#### Install packages:
+
+    conda install numpy
+    conda install -c conda-forge tifffile
+    conda install scikit-image
+    conda install -c conda-forge vigra
+    pip install pyelastix
+    conda install -c conda-forge silx[full]
+    conda install -c conda-forge pyopencl
+
+Additionally, check the potential issues specified below. 
+
+### Installation on linux with environment file 
+
+Open a terminal/command line and navigate to the AMST package:
+
+    cd /home/user/src/amst 
+
+For Windows, installing the wheel will install the dependencies. Then jump to create environment manually.
+
+For Linux, type:
+
+    conda env create --file amst_env_linux.yml
+
+###  Installation on Windows
+
+#### Create new conda environment 
+
+Open a terminal/command line and follow the commands below.
+
+Create a new environment:
+
+    conda create --name amst_env python=3.6
+
+#### Activate your environment:
+
+    conda activate amst_env
+
+#### Installation of packages:
+
+- Open a command line and navigate to the directory where you cloned amst and into the sub-folder amst_win, e.g.
+
+    cd C:\users\username\src\amst\amst_win
+    
+For the next steps, make sure the amst_env is activated (see above).
+
+- Execute: 
+
+    pip install vigranumpy-(press tab to autocomplete)
+    
+- Execute:
+
+    pip install amst_bin_win-(press tab to autocomplete)
+
+    If pyopencl gives problems (you will see error messages with pyopencl involved), execute:
+        
+        pip install pyopencl-(press tab to autocomplete) 
+    
+    Then again:
+        pip install amst_bin_win-(press tab to autocomplete)
+
+- Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__
+- Execute :
+    python example_usage.py
+
+If everything went well, it will start.
+
 ### Installation of Elastix
 
-Please also refer to the exlastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl/doxygen/index.html
 
 Extract the downloaded archive to a folder of your choice (/path/to/elastix)
 
-For Linux add the following to the .bashrc:
+Add the following to the .bashrc:
 
     export PATH=/path/to/elastix/bin:$PATH
     export LD LIBRARY PATH=/path/to/elastix/lib:$LD LIBRARY PATH
@@ -47,55 +137,10 @@ Calling elastix from command line should now work, e.g.:
 
     $ elastix --help
     
-### Installing Miniconda
-
-Download miniconda from https://docs.conda.io/en/latest/miniconda.html
-for python3.7 and install it to the folder of your choice.
-
-### Set up the conda environment
-
-#### With environment file
-
-Open a terminal/command line and navigate to the AMST package:
-
-    cd /home/user/src/amst 
-
-For Linux, type:
-
-    conda env create --file amst_env_linux.yml
-    
-For Windows, type:
-
-    conda env create --file amst_env_windows.yml
-    
-Please check for below for potential issues.
-
-#### Manually
-
-Open a terminal/command line and follow the commands below.
-
-Create an new environment:
-
-    conda create --name amst_env python=3.6
-
-Activate it:
-
-    conda activate amst_env
-    
-Install required packages:
-
-    conda install numpy
-    conda install -c conda-forge tifffile
-    conda install scikit-image
-    conda install -c conda-forge vigra
-    pip install pyelastix
-    conda install -c conda-forge silx[full]
-    conda install -c conda-forge pyopencl
-
-Additionally, check the potential issues specified below. 
+Please also refer to the elastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl
 
 
-## Usage
+## Usage (both Windows and Linux)
 
 An example usage can be found in example_usage.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
@@ -111,6 +156,7 @@ Copy the example script to the new folder
     cp ~/src/amst/example_usage.py my_first_amst_experiment.py
     
 Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder. 
+(Note for Windows: Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data")
 The parent folder of the target folder has to exist in your file system. If not, create it
 
     mkdir /path/to/target/folder 
@@ -123,7 +169,10 @@ Run the script
 
     python my_first_amst_experiment.py 
 
-## Parameters
+
+Additionally, check below "Known errors and issues" in case of any potential issues. 
+
+## Parameters (OPTIONAL)
 
 ### Main parameters
 
@@ -312,11 +361,20 @@ to
 
 Also see https://github.com/almarklein/pyelastix/pull/8
     
-### 4. Result data seems all-zero 
+### 4. Result data seems all-zero (all images are black) 
 
-There seems to be some debug code left in the pyelastix package.
+It seems to be some debug code left in the pyelastix package.
 Check line 558 in /path/to/miniconda3/envs/amst_env_devel/lib/python3.6/site-packages/pyelastix.py. If it is 
 
     im = im* (1.0/3000)
     
-delete it.
+delete the line.
+
+
+### 5. Problems with module 'Module not found error'
+In some occasions is not possible to download a package properly from conda or pip. If that is the case, download the corresponding
+wheel from a different repository. For example, you can use the wheels from Christoph Golke page, for example, for Vigra:
+https://www.lfd.uci.edu/~gohlke/pythonlibs/#vigra
+
+Download the .whl file and then install using pip:
+   pip install dowloaded_package.whl
