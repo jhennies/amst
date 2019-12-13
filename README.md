@@ -38,7 +38,7 @@ Alternatively, if you are planning on using python later use https://www.anacond
 
 #### Create new conda environment 
 
-Open a terminal/command line and follow the commands below.
+Open the anaconda prompt and follow the commands below.
 
 Create a new environment:
 
@@ -50,7 +50,7 @@ Create a new environment:
 
 #### Installation of packages:
 
-- Open a command line and navigate to the directory where you cloned amst and into the sub-folder amst_win, e.g.
+- Open the anaconda prompt and navigate to the directory where you cloned amst and into the sub-folder amst_win, e.g.
 
         cd C:\users\username\src\amst\amst_win
     
@@ -118,9 +118,7 @@ Open a terminal/command line and navigate to the AMST package:
 
     cd /home/user/src/amst
 
-For Windows, installing the wheel will install the dependencies. Then jump to create environment manually.
-
-For Linux, type:
+To install the packages, type:
 
     conda env create --file amst_env_linux.yml
 
