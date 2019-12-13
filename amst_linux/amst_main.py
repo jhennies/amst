@@ -544,7 +544,154 @@ def amst_align(
         verbose=False,
         write_intermediates=False
 ):
+    if not os.path.exists(target_folder):
+        os.mkdir(target_folder)
+    if write_intermediates:
+        if not os.path.exists(os.path.join(target_folder, 'sift')):
+            os.mkdir(os.path.join(target_folder, 'sift'))
+        if not os.path.exists(os.path.join(target_folder, 'refs')):
+            os.mkdir(os.path.join(target_folder, 'refs'))
 
+    # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
+    # The slices in each batch of data are generated in parallel
+    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names in pre_processing_generator(
+            raw_folder,
+            pre_alignment_folder,
+            median_radius=median_radius,
+            sift_sigma=sift_sigma,
+            sift_downsample=sift_downsample,
+            n_workers=n_workers,
+            compute_range=compute_range,
+            target_folder=target_folder,
+            verbose=verbose
+    ):
+        if coarse_alignment is not None:
+            if coarse_alignment == 'SIFT':
+                print('Coarse alignment by translation done with SIFT.')
+                _on_pair_func = _sift_on_pair
+            else:
+                print('Coarse alignment by translation done with cross correlation.')
+                _on_pair_func = _xcorr_on_pair
+            # Run SIFT align with one thread if computation is performed on the GPU, otherwise multi-threading speeds
+            # up the rather slow CPU computation
+            if n_workers_sift > 1:
+                with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+                    tasks = [
+                        tpe.submit(
+                            _on_pair_func, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(templates_med))
+                    ]
+                    offsets = [task.result()
+                            if task is not None else None
+                            for task in tasks]
+            else:
+                offsets = [
+                    _on_pair_func(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
+                    if raws_crop[idx] is not None else None
+                    for idx in range(len(templates_med))
+                ]
+            if sift_downsample is not None:
+                offsets = [np.array(offset) * np.array(sift_downsample)
+                        if offset is not None else None
+                        for offset in offsets]
+            del templates_med_smooth
+            del raws_crop_smooth
+
+            # Shift the batch of data in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _displace_slice, (raws_crop[idx], offsets[idx])
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(raws_crop))
+                    ]
+                    raws_crop = [task.get()
+                                if task is not None else None
+                                for task in tasks]
+            else:
+                raws_crop = [_displace_slice(raws_crop[idx], offsets[idx])
+                            if raws_crop[idx] is not None else None
+                            for idx in range(len(raws_crop))]
+
+        if write_intermediates:
+            # Write the sift images in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _write_result, (
+                                os.path.join(target_folder, 'sift', names[idx]), raws_crop[idx]
+                            )
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(raws_crop))
+                    ]
+                    [task.get()
+                    if task is not None else None
+                    for task in tasks]
+            else:
+                [_write_result(os.path.join(target_folder, 'sift', names[idx]), raws_crop[idx])
+                if raws_crop[idx] is not None else None
+                for idx in range(len(raws_crop))
+                ]
+            # Write template images in parallel
+            if n_workers > 1:
+                with Pool(processes=n_workers) as p:
+                    tasks = [
+                        p.apply_async(
+                            _write_result, (
+                                os.path.join(target_folder, 'refs', names[idx]), templates_med[idx]
+                            )
+                        )
+                        if raws_crop[idx] is not None else None
+                        for idx in range(len(raws_crop))
+                    ]
+                    [task.get()
+                    if task is not None else None
+                    for task in tasks]
+            else:
+                [_write_result(os.path.join(target_folder, 'refs', names[idx]), templates_med[idx])
+                if raws_crop[idx] is not None else None
+                for idx in range(len(raws_crop))
+                ]
+
+        # Register with ELASTIX with one thread, as it is parallelized internally
+        raws_crop = [
+            _register_with_elastix(
+                templates_med[idx], raws_crop[idx], name=names[idx],
+                elastix_params=elastix_params, verbose=verbose
+            )
+            if raws_crop[idx] is not None else None
+            for idx in range(len(raws_crop))
+        ]
+        del templates_med
+
+        # Write the results in parallel
+        if n_workers > 1:
+            with Pool(processes=n_workers) as p:
+                tasks = [
+                    p.apply_async(
+                        _write_result, (
+                            os.path.join(target_folder, names[idx]), raws_crop[idx]
+                        )
+                    )
+                    if raws_crop[idx] is not None else None
+                    for idx in range(len(raws_crop))
+                ]
+                [task.get()
+                if task is not None else None
+                for task in tasks]
+        else:
+            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx])
+            if raws_crop[idx] is not None else None
+            for idx in range(len(raws_crop))
+            ]
+
+    
 
 if __name__ == '__main__':
 
