@@ -217,7 +217,7 @@ def default_amst_params():
     return dict(
         median_radius=7,         # radius of the median smoothing surrounding
         elastix_params=optimized_elastix_params(),
-        coarse_alignment=True,     # Use SIFT to get the raw data close to the template
+        coarse_alignment='SIFT',     # Use SIFT to get the raw data close to the template
         sift_sigma=1.6,          # Pre-smooth data before running the SIFT
         sift_downsample=(2, 2),  # Downsample the data for the SIFT (for speed-up, downsampling by 2 should not
                                  #     compromize the final result
