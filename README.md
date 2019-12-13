@@ -70,13 +70,13 @@ For the next steps, make sure the amst_env is activated (see above).
     
     Then reinstall again the wheel:
 
-            pip install amst_bin_win-(press tab to autocomplete)
+        pip install amst_bin_win-(press tab to autocomplete)
 
 - Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__ which correspond
 to the raw data, the pre-aligned data and a target folder for the output. Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data".
 - Activate your environment if needed.
 
-           activate amst_env
+        activate amst_env
   Execute:
 
         python example_usage.py
@@ -124,7 +124,7 @@ For Linux, type:
 
     conda env create --file amst_env_linux.yml
 
-### Installation of Elastix
+### Installation of Elastix (Linux)
 
 Extract the downloaded archive to a folder of your choice (/path/to/elastix).
 
@@ -380,7 +380,7 @@ Download the .whl file and then install using pip:
    pip install dowloaded_package.whl
 
 
-### 6. OUT_OF_RESOURCES error (general)
+### 6. OUT_OF_RESOURCES error during SIFT execution
 
 _pyopencl._cl.RuntimeError: clEnqueueReadBuffer failed: OUT_OF_RESOURCES_
 
