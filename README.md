@@ -52,31 +52,34 @@ Create a new environment:
 
 - Open a command line and navigate to the directory where you cloned amst and into the sub-folder amst_win, e.g.
 
-    cd C:\users\username\src\amst\amst_win
+        cd C:\users\username\src\amst\amst_win
     
 For the next steps, make sure the amst_env is activated (see above).
 
 - Execute: 
 
-    pip install vigranumpy-(press tab to autocomplete)
+        pip install vigranumpy-(press tab to autocomplete)
     
 - Execute:
 
-    pip install amst_bin_win-(press tab to autocomplete)
+        pip install amst_bin_win-(press tab to autocomplete)
 
     If pyopencl gives problems (you will see error messages with pyopencl involved), install the provided pyopencl wheel and execute:
         
         pip install pyopencl-(press tab to autocomplete) 
     
     Then reinstall again the wheel:
-        pip install amst_bin_win-(press tab to autocomplete)
+
+            pip install amst_bin_win-(press tab to autocomplete)
 
 - Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__ which correspond
 to the raw data, the pre-aligned data and a target folder for the output. Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data".
 - Activate your environment if needed.
-    activate amst_env
-  Execute :
-    python example_usage.py
+
+           activate amst_env
+  Execute:
+
+        python example_usage.py
 
 If everything went well, it will start. If you have any problem with dependencies, check the file amst_env_linux.yml and try to install dependencies manually.
 
