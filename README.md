@@ -33,43 +33,6 @@ for python3.7 and install it to the folder of your choice.
 
 Alternatively, if you are planning on using python later use https://www.anaconda.com/distribution/
 
-### Manual installation on Linux
-
-#### Creating environment manually
-
-Open a terminal/command line and follow the commands below.
-
-Create a new environment:
-
-    conda create --name amst_env python=3.6
-
-#### Activate your environment:
-
-    conda activate amst_env
-
-#### Install packages:
-
-    conda install numpy
-    conda install -c conda-forge tifffile
-    conda install scikit-image
-    conda install -c conda-forge vigra
-    pip install pyelastix
-    conda install -c conda-forge silx[full]
-    conda install -c conda-forge pyopencl
-
-Additionally, check the potential issues specified below. 
-
-### Installation on linux with environment file 
-
-Open a terminal/command line and navigate to the AMST package:
-
-    cd /home/user/src/amst 
-
-For Windows, installing the wheel will install the dependencies. Then jump to create environment manually.
-
-For Linux, type:
-
-    conda env create --file amst_env_linux.yml
 
 ###  Installation on Windows
 
@@ -108,16 +71,59 @@ For the next steps, make sure the amst_env is activated (see above).
     Then reinstall again the wheel:
         pip install amst_bin_win-(press tab to autocomplete)
 
-- Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__
-
-- Execute :
+- Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__ which correspond
+to the raw data, the pre-aligned data and a target folder for the output. Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data".
+- Activate your environment if needed.
+    activate amst_env
+  Execute :
     python example_usage.py
 
 If everything went well, it will start. If you have any problem with dependencies, check the file amst_env_linux.yml and try to install dependencies manually.
 
-### Installation of Elastix (only Linux)
 
-Extract the downloaded archive to a folder of your choice (/path/to/elastix)
+## Installation on Linux
+
+### Manual installation on Linux
+
+#### Creating environment manually
+
+Open a terminal/command line and follow the commands below.
+
+Create a new environment:
+
+    conda create --name amst_env python=3.6
+
+#### Activate your environment:
+
+    conda activate amst_env
+
+#### Install packages:
+
+    conda install numpy
+    conda install -c conda-forge tifffile
+    conda install scikit-image
+    conda install -c conda-forge vigra
+    pip install pyelastix
+    conda install -c conda-forge silx[full]
+    conda install -c conda-forge pyopencl
+
+Additionally, check the potential issues specified below.
+
+### Installation on linux with environment file
+
+Open a terminal/command line and navigate to the AMST package:
+
+    cd /home/user/src/amst
+
+For Windows, installing the wheel will install the dependencies. Then jump to create environment manually.
+
+For Linux, type:
+
+    conda env create --file amst_env_linux.yml
+
+### Installation of Elastix
+
+Extract the downloaded archive to a folder of your choice (/path/to/elastix).
 
 Add the following to the .bashrc:
 
@@ -132,8 +138,7 @@ Calling elastix from command line should now work, e.g.:
     
 Please also refer to the elastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl
 
-
-## Execution script instructions (both Windows and Linux)
+### Execution script instructions (Linux)
 
 An example usage can be found in example_usage.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
@@ -148,8 +153,7 @@ Copy the example script to the new folder
 
     cp ~/src/amst/example_usage.py my_first_amst_experiment.py
     
-Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder. 
-(Note for Windows: Use double back-slashes for path names, e.g. "C:\\\path\\\to\\\your\\\data")
+Adapt the script to specify the locations of the raw data, the pre-aligned data and a target folder.
 The parent folder of the target folder has to exist in your file system. If not, create it
 
     mkdir /path/to/target/folder 
