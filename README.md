@@ -21,7 +21,7 @@ Clone this repository
     git clone https://github.com/jhennies/amst.git
 
 The AMST package will now reside in /home/user/src/amst. For convenience the following instructions assume this location. 
-In case you cloned the git elsewhere adapt the respective instructions accordingly.
+In case you cloned the git elsewhere adapt the folder paths accordingly.
 
 
 ### Installing Miniconda or Anaconda 
@@ -101,21 +101,21 @@ For the next steps, make sure the amst_env is activated (see above).
 
     pip install amst_bin_win-(press tab to autocomplete)
 
-    If pyopencl gives problems (you will see error messages with pyopencl involved), execute:
+    If pyopencl gives problems (you will see error messages with pyopencl involved), install the provided pyopencl wheel and execute:
         
         pip install pyopencl-(press tab to autocomplete) 
     
-    Then again:
+    Then reinstall again the wheel:
         pip install amst_bin_win-(press tab to autocomplete)
 
 - Using a text editor (Notepad,...), open example_usage.py and replace the directories marked as __raw__, __aligned__ and __results__
+
 - Execute :
     python example_usage.py
 
-If everything went well, it will start.
+If everything went well, it will start. If you have any problem with dependencies, check the file amst_env_linux.yml and try to install dependencies manually.
 
-### Installation of Elastix
-
+### Installation of Elastix (only Linux)
 
 Extract the downloaded archive to a folder of your choice (/path/to/elastix)
 
@@ -125,13 +125,6 @@ Add the following to the .bashrc:
     export LD LIBRARY PATH=/path/to/elastix/lib:$LD LIBRARY PATH
     
 Replace '/path/to/elastix/' by the correct folder where elastix was imported to and which contains the bin and lib folders.
-    
-Likewise, for Windows add
-
-    /path/to/elastix/bin
-    /path/to/elastix/lib
-    
-to the environment variables.
 
 Calling elastix from command line should now work, e.g.:
 
@@ -140,7 +133,7 @@ Calling elastix from command line should now work, e.g.:
 Please also refer to the elastix documentation manual that can be downloaded here: http://elastix.isi.uu.nl
 
 
-## Usage (both Windows and Linux)
+## Execution script instructions (both Windows and Linux)
 
 An example usage can be found in example_usage.py showing the basic functionalities of AMST.
 To run the script, download the example data and adapt the script according to the data location in the file system.
@@ -361,7 +354,7 @@ to
 
 Also see https://github.com/almarklein/pyelastix/pull/8
     
-### 4. Result data seems all-zero (all images are black) 
+### 4. Result data seems all-zero (all output images are black)
 
 It seems to be some debug code left in the pyelastix package.
 Check line 558 in /path/to/miniconda3/envs/amst_env_devel/lib/python3.6/site-packages/pyelastix.py. If it is 
@@ -378,3 +371,14 @@ https://www.lfd.uci.edu/~gohlke/pythonlibs/#vigra
 
 Download the .whl file and then install using pip:
    pip install dowloaded_package.whl
+
+
+### 6. OUT_OF_RESOURCES error (general)
+
+_pyopencl._cl.RuntimeError: clEnqueueReadBuffer failed: OUT_OF_RESOURCES_
+
+SIFT uses pyopencl to do the alignments. In occasions, when NVIDIA drivers are not compatible or another process is using GPU memory, the process from the silx library fails
+uploading the kernel and you will get different types of OUT_OF_RESOURCES errors. Once this happens, you have to stop the python kernel (the GPU memory has been corrupted), and in occasions even restart the computer.
+If after restarting, the error keeps showing, change the coarse_alignment to XCORR (cross correlation). This should solve the problem and the coarse alignment now is done by CPU.
+
+
