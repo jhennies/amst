@@ -7,7 +7,7 @@ import sys
 # for the example above
 sys.path.append('/path/to/amst/')
 
-from amst_main import amst_align, default_amst_params
+from amst_linux.amst_main import amst_align, default_amst_params
 
 raw_folder = '/path/to/raw/data/'
 pre_alignment_folder = '/path/to/pre/alignment'
