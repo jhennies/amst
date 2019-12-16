@@ -198,8 +198,8 @@ Settings of the amst algorithm
         # Parameters for the affine transformation step using Elastix; see below for more details
         elastix_params=optimized_elastix_params(),
         
-        # Use SIFT to get the raw data close to the template
-        sift_pre_align=True,     
+        # Use SIFT to get the raw data close to the template. Use XCORR as an alternative using cross-correlation
+        coarse_alignment='SIFT',     
         
         # Pre-smooth data before running the SIFT
         sift_sigma=1.6,   
