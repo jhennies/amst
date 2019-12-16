@@ -319,6 +319,10 @@ def pre_processing_generator(
             except ValueError as e:
                 # This happened when a white slice was present (no zero pixel)
                 warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
+                print('This happens if a completely black slice is present in the data. ')
+                print('Affected slice: {}'.format(im_list_raw[idx]))
+                print('Replacing with empty slice ...')
+                im = np.zeros(median_z.shape, dtype=im.dtype)
 
         # Gaussian smooth the image and the median_z for the SIFT step
         if sift_sigma is not None:
@@ -365,8 +369,8 @@ def pre_processing_generator(
     im_list_pre = np.sort(glob(os.path.join(pre_alignment_folder, '*.tif')))[compute_range]
 
     # Some assertions here to ensure the folders actually contain tif files
-    assert im_list_raw != [], 'The raw folder does not contain *.tif files. \nEnsure the raw_folder input points to the correct location.'
-    assert im_list_pre != [], 'The folder for the pre-alignment does not contain *.tif files. \nEnsure the pre_alignment_folder input points to the correct location.'
+    assert im_list_raw.size != 0, 'The raw folder does not contain *.tif files. \nEnsure the raw_folder input points to the correct location.'
+    assert im_list_pre.size != 0, 'The folder for the pre-alignment does not contain *.tif files. \nEnsure the pre_alignment_folder input points to the correct location.'
 
     # Warning for different numbers of tif slices in raw and pre-align folders
     if len(im_list_raw) != len(im_list_pre):
