@@ -44,6 +44,7 @@ def smooth_displace(
         suppress_x=False,
         subpx_displacement=False,
         compression=0,
+        pattern='*.tif',
         verbose=0
 ):
     """
@@ -63,7 +64,7 @@ def smooth_displace(
 
     print('Computing {} with n_workers={}'.format(displace, n_workers))
 
-    im_list = np.array(sorted(glob.glob(os.path.join(source_folder, '*.tif'))))[source_range]
+    im_list = np.array(sorted(glob.glob(os.path.join(source_folder, pattern))))[source_range]
 
     # Load the displacements
     # FIXME This currently assumes Fiji's 1-based slice numbering
