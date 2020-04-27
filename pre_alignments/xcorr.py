@@ -30,7 +30,7 @@ def _xcorr(image, offset_image, thresh=0, sigma=1.):
     return shift[1], shift[0]
 
 
-def _displace_slice(image_filepath, offset, result_filepath=None, subpx_displacement=False):
+def _displace_slice(image_filepath, offset, result_filepath=None, subpx_displacement=False, compression=0):
     print('Writing {}'.format(os.path.split(image_filepath)[1]))
     image = imread(image_filepath)
     if subpx_displacement:
@@ -39,7 +39,7 @@ def _displace_slice(image_filepath, offset, result_filepath=None, subpx_displace
         image = shift(image, -np.round([offset[1], offset[0]]))
 
     if result_filepath is not None:
-        imsave(result_filepath, image)
+        imsave(result_filepath, image, compress=compression)
 
     return image
 
@@ -95,6 +95,7 @@ def offsets_with_xcorr(
         subpixel_displacements=False,
         threshold=0,
         sigma=1.,
+        compression=0,
         n_workers=1,
         verbose=0
 ):
@@ -145,7 +146,8 @@ def offsets_with_xcorr(
                     _displace_slice(im_filepath,
                                     seq_offsets[im_idx],
                                     result_filepath=result_filepath,
-                                    subpx_displacement=subpixel_displacements)
+                                    subpx_displacement=subpixel_displacements,
+                                    compression=compression)
         else:
             with ThreadPoolExecutor(max_workers=n_workers) as tpe:
                 tasks = [
@@ -153,7 +155,8 @@ def offsets_with_xcorr(
                                im_filepath,
                                seq_offsets[im_idx],
                                os.path.join(target_folder, os.path.split(im_filepath)[1]),
-                               subpixel_displacements)
+                               subpixel_displacements,
+                               compression)
                     for im_idx, im_filepath in enumerate(im_list)
                     if not os.path.exists(os.path.join(target_folder, os.path.split(im_filepath)[1]))
                 ]

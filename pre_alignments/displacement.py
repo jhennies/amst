@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from matplotlib import pyplot as plt
 
 
-def displace(target_folder, im_filepath, displacement, subpx_displacement=False):
+def displace(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0):
 
     filename = os.path.split(im_filepath)[1]
     if os.path.isfile(os.path.join(target_folder, filename)):
@@ -31,7 +31,7 @@ def displace(target_folder, im_filepath, displacement, subpx_displacement=False)
         im = shift(im, (displacement[1], displacement[0]))
 
     # Write result
-    imsave(os.path.join(target_folder, filename), im.astype(im.dtype))
+    imsave(os.path.join(target_folder, filename), im.astype(im.dtype), compress=compression)
 
 
 def smooth_displace(
@@ -43,6 +43,7 @@ def smooth_displace(
         parallel_method='multi_process',
         suppress_x=False,
         subpx_displacement=False,
+        compression=0,
         verbose=0
 ):
     """
@@ -112,7 +113,7 @@ def smooth_displace(
         print('Running with one worker...')
         for idx in range(len(im_list)):
             displace(
-                target_folder, im_list[idx], displacements[idx], subpx_displacement=subpx_displacement
+                target_folder, im_list[idx], displacements[idx], subpx_displacement=subpx_displacement, compression=compression
             )
 
     else:
@@ -124,7 +125,7 @@ def smooth_displace(
                 tasks = [
                     p.apply_async(
                         displace, (
-                            target_folder, im_list[idx], displacements[idx], subpx_displacement
+                            target_folder, im_list[idx], displacements[idx], subpx_displacement, compression
                         )
                     )
                     for idx in range(len(im_list))
