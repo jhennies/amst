@@ -226,11 +226,14 @@ def default_amst_params():
         sift_devicetype='GPU',   # Run the SIFT on GPU or CPU
         compute_range=np.s_[:],  # Select a subset of the data for alignment (good for parameter testing)
         verbose=False,           # Set to True for a more detailed console output
-        write_intermediates=False  # Set to True to also write the median smoothed template and the results of the SIFT
+        write_intermediates=False,  # Set to True to also write the median smoothed template and the results of the SIFT
                                  # step to disk; two folders will be created within the specified target directory that
                                  # contain this data ('refs' and 'sift')
+        raw_pattern='*.tif',     # Glob pattern describing the raw file name format (default looks for any tif file)
+        pre_pattern='*.tif',     # Glob pattern describing the pre-alignment file name format
+                                 # (default looks for any tif file)
+        compression=0            # Value between 0 (no compression) and 9 (high compression level) for the results
     )
-
 
 
 def pre_processing_generator(
@@ -242,6 +245,8 @@ def pre_processing_generator(
         n_workers=8,
         compute_range=np.s_[:],
         target_folder=None,
+        raw_pattern='*.tif',
+        pre_pattern='*.tif',
         verbose=False
 ):
     # __________________________________________________________________________________________________________________
@@ -365,8 +370,8 @@ def pre_processing_generator(
         pre_alignment_folder), 'The folder for the pre-alignment does not exist. \nEnsure the pre_alignment_folder input points to the correct location.'
 
     # Find the tif files in the respective directories for the raw data and the pre-alignment
-    im_list_raw = np.sort(glob(os.path.join(raw_folder, '*.tif')))[compute_range]
-    im_list_pre = np.sort(glob(os.path.join(pre_alignment_folder, '*.tif')))[compute_range]
+    im_list_raw = np.sort(glob(os.path.join(raw_folder, raw_pattern)))[compute_range]
+    im_list_pre = np.sort(glob(os.path.join(pre_alignment_folder, pre_pattern)))[compute_range]
 
     # Some assertions here to ensure the folders actually contain tif files
     assert im_list_raw.size != 0, 'The raw folder does not contain *.tif files. \nEnsure the raw_folder input points to the correct location.'
@@ -527,9 +532,9 @@ def _register_with_elastix(fixed, moving,
     return result.astype(moving.dtype)
 
 
-def _write_result(filepath, image):
+def _write_result(filepath, image, compression=0):
     print('Writing result in {}'.format(filepath))
-    imsave(filepath, image)
+    imsave(filepath, image, compress=compression)
 
 
 def amst_align(
@@ -546,7 +551,10 @@ def amst_align(
         sift_devicetype='GPU',
         compute_range=np.s_[:],
         verbose=False,
-        write_intermediates=False
+        write_intermediates=False,
+        raw_pattern='*.tif',
+        pre_pattern='*.tif',
+        compression=0
 ):
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
@@ -567,6 +575,8 @@ def amst_align(
             n_workers=n_workers,
             compute_range=compute_range,
             target_folder=target_folder,
+            raw_pattern=raw_pattern,
+            pre_pattern=pre_pattern,
             verbose=verbose
     ):
         if coarse_alignment is not None:
@@ -680,7 +690,7 @@ def amst_align(
                 tasks = [
                     p.apply_async(
                         _write_result, (
-                            os.path.join(target_folder, names[idx]), raws_crop[idx]
+                            os.path.join(target_folder, names[idx]), raws_crop[idx], compression
                         )
                     )
                     if raws_crop[idx] is not None else None
@@ -690,7 +700,7 @@ def amst_align(
                 if task is not None else None
                 for task in tasks]
         else:
-            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx])
+            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx], compression)
             if raws_crop[idx] is not None else None
             for idx in range(len(raws_crop))
             ]
