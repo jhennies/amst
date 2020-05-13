@@ -11,7 +11,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from matplotlib import pyplot as plt
 
 
-def displace(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0):
+def displace(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0, pad_zeros=None):
 
     filename = os.path.split(im_filepath)[1]
     if os.path.isfile(os.path.join(target_folder, filename)):
@@ -23,7 +23,12 @@ def displace(target_folder, im_filepath, displacement, subpx_displacement=False,
     # Load image
     im = imread(im_filepath)
 
-    # FIXME figure out if this is right
+    # zero-pad image
+    if pad_zeros:
+        pad_im = np.zeros(np.array(im.shape) + (2*pad_zeros), dtype=im.dtype)
+        pad_im[pad_zeros: -pad_zeros, pad_zeros: -pad_zeros] = im
+        im = pad_im
+
     # Shift the image
     if subpx_displacement:
         im = shift(im, (np.round(displacement[1]), np.round(displacement[0])))
@@ -45,6 +50,7 @@ def smooth_displace(
         subpx_displacement=False,
         compression=0,
         pattern='*.tif',
+        pad_zeros=None,
         verbose=0
 ):
     """
@@ -114,7 +120,8 @@ def smooth_displace(
         print('Running with one worker...')
         for idx in range(len(im_list)):
             displace(
-                target_folder, im_list[idx], displacements[idx], subpx_displacement=subpx_displacement, compression=compression
+                target_folder, im_list[idx], displacements[idx], subpx_displacement=subpx_displacement,
+                compression=compression, pad_zeros=pad_zeros
             )
 
     else:
@@ -126,7 +133,7 @@ def smooth_displace(
                 tasks = [
                     p.apply_async(
                         displace, (
-                            target_folder, im_list[idx], displacements[idx], subpx_displacement, compression
+                            target_folder, im_list[idx], displacements[idx], subpx_displacement, compression, pad_zeros
                         )
                     )
                     for idx in range(len(im_list))
