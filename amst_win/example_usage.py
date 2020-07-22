@@ -6,7 +6,8 @@ target_folder = 'your_path\\hela_res'
 
 # Load the default parameters
 params = default_amst_params()
-params['n_workers'] = 2  # The default number of CPU cores is 8; set this to the number that is available
+params['n_workers'] = 8  # The default number of CPU cores is 8; set this to the number that is available
+params['verbose'] = True
 
 if __name__ == '__main__':
 	amst_align(raw_folder=raw_folder,
