@@ -18,6 +18,7 @@ parser.add_argument('--gauss', type=float, default=0.0)
 parser.add_argument('--n_workers', type=int, default=8)
 parser.add_argument('--pattern', type=str, default='*.tif')
 parser.add_argument('--suppress_x', type=int, default=0)
+parser.add_argument('--source_range', type=int, default=[None, None], nargs=2)
 
 args = parser.parse_args()
 target_folder = args.target_folder
@@ -28,6 +29,7 @@ gauss = args.gauss
 n_workers = args.n_workers
 pattern = args.pattern
 suppress_x = args.suppress_x
+source_range = np.s_[args.source_range[0]: args.source_range[1]]
 
 assert source_folder is not None
 assert target_folder is not None
