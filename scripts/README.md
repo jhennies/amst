@@ -5,6 +5,8 @@
 
 Use this function to perform displacements obtained by Fiji's template matching plugin.
 
+    $ cd /path/to/amst/scripts/
+    $ conda activate amst-env
     (amst-env)$ python smooth_displace.py --target_folder "path" --source_folder "path" --displacement_file "file.csv" [optional_parameters]
 
 ### parameters and defaults
