@@ -33,14 +33,10 @@ assert source_folder is not None
 assert target_folder is not None
 assert displacement_file is not None
 
-print('outside the main')
-
 if not os.path.exists(target_folder):
     os.mkdir(target_folder)
 
 if __name__ == '__main__':
-
-    print('I was here')
 
     smooth_displace(
         source_folder=source_folder,
