@@ -13,13 +13,15 @@ Use this function to perform displacements obtained by Fiji's template matching 
 
 #### mandatory:
 
-Where to save the result:
-
     --target_folder /path/to/where/to/save/the/result
-    
-
     --source_folder /path/of/input/slices
     --displacement_file /filepath/of/displacements.csv
+    
+Explanations:
+ - target_folder: A folder where to save the result. If not existing, this folder will be created, however the 
+ parent folder has to exist.
+ - source_folder: Folder that contains the input slices
+ - displacement_file: csv file created by saving the results table of Fiji's template matching plugin
 
 #### optional:
 
@@ -30,6 +32,14 @@ Where to save the result:
     --suppress_x 0
     --source_range 0
     
+Explanations:
+ - median: Median-smoothing of the displacements before application. Specifies the radius of this median filter
+ - gauss: Gaussian smoothing of the displacements before application. Specifies the gaussian sigma
+ - n_workers: Number of CPU cores used for calculation
+ - pattern: File pattern of the input slices. The default *.tif is usually fine for a folder of tif slices.
+ - suppress_x: If set to 1, only the y component of the displacements is applied to the slices
+ - source_range: Defines a subset of the input tif slices. The size of the subset must match the number of entries in 
+ the displacement file.
 ### Tipps and tricks
 
 To apply the displacements as they are coming from the Fiji plugin use median=0, gauss=0 and suppress_x=0. 
