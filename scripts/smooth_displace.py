@@ -1,8 +1,7 @@
 
 import sys
-sys.path.append('../pre_alignments')
 
-from displacement import smooth_displace
+from pre_alignments.displacement import smooth_displace
 import numpy as np
 import os
 from matplotlib import pyplot as plt
@@ -18,7 +17,7 @@ parser.add_argument('--gauss', type=float, default=0.0)
 parser.add_argument('--n_workers', type=int, default=8)
 parser.add_argument('--pattern', type=str, default='*.tif')
 parser.add_argument('--suppress_x', type=int, default=0)
-parser.add_argument('--source_range', type=int, default=[None, None], nargs=2)
+parser.add_argument('--source_range', type=int, default=[None, None], nargs='+')
 
 args = parser.parse_args()
 target_folder = args.target_folder
@@ -29,7 +28,15 @@ gauss = args.gauss
 n_workers = args.n_workers
 pattern = args.pattern
 suppress_x = args.suppress_x
-source_range = np.s_[args.source_range[0]: args.source_range[1]]
+if len(args.source_range) == 2:
+    sr0 = args.source_range[0]
+    sr1 = args.source_range[1]
+elif len(args.source_range) == 1:
+    sr0 = args.source_range[0]
+    sr1 = None
+else:
+    raise
+source_range = np.s_[sr0: sr1]
 
 assert source_folder is not None
 assert target_folder is not None
@@ -47,7 +54,7 @@ if __name__ == '__main__':
         median_radius=median,
         gaussian_sigma=gauss,
         n_workers=n_workers,
-        source_range=np.s_[:],
+        source_range=source_range,
         parallel_method='multi_process',
         suppress_x=bool(suppress_x),
         pattern=pattern,

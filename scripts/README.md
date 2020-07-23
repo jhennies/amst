@@ -19,6 +19,7 @@ Use this function to perform displacements obtained by Fiji's template matching 
     --n_workers 8
     --pattern "*.tif"
     --suppress_x 0
+    --source_range 0
     
 ### Tipps and tricks
 
@@ -37,3 +38,6 @@ the smoothing can be increased.
 
 In cases where only the sample surface can be used for TM to correct for a y-drift, TM can be performed selectivelly on 
 on the y-axis (suppress_x=1)
+
+The source range parameter defines only the range of the tif slices in the source_folder to be used. The IDs in the 
+displacement file are kept as they are. 
