@@ -35,7 +35,7 @@ elif len(args.source_range) == 1:
     sr0 = args.source_range[0]
     sr1 = None
 else:
-    raise
+    raise RuntimeError
 source_range = np.s_[sr0: sr1]
 
 assert source_folder is not None

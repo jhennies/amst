@@ -11,13 +11,22 @@ Use this function to perform displacements obtained by Fiji's template matching 
 
 ### parameters and defaults
 
-    --target_folder "/path/to/where/to/save/the/result"
-    --source_folder "/path/of/input/slices"
-    --displacement_file "/filepath/of/displacements.csv"
+#### mandatory:
+
+Where to save the result:
+
+    --target_folder /path/to/where/to/save/the/result
+    
+
+    --source_folder /path/of/input/slices
+    --displacement_file /filepath/of/displacements.csv
+
+#### optional:
+
     --median 0
     --gauss 0.0
     --n_workers 8
-    --pattern "*.tif"
+    --pattern *.tif
     --suppress_x 0
     --source_range 0
     

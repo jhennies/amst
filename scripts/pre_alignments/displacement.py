@@ -86,11 +86,12 @@ def smooth_displace(
             line_count += 1
     assert min(displacements.keys()) >= 0, "Slice indices are assumed in Fiji's 1-based slice numbering!"
 
-    # Process the displacements
-    disps_array = np.array([displacements[x] if x in displacements.keys() else (0., 0.) for x in range(max(displacements.keys()) + 1)])
+    # Here we have to make sure that the reference slice is added to the displacements
+    disps_array = np.array([displacements[x] if x in displacements.keys() else (0., 0.) for x in range(len(displacements) + 1)])
     if verbose >= 2:
         plt.plot(disps_array)
 
+    # Process the displacements
     disps_y = disps_array[:, 1]
     if median_radius > 0:
         disps_y = medfilt(disps_y, median_radius * 2 + 1)
