@@ -10,7 +10,8 @@ params['n_workers'] = 8  # The default number of CPU cores is 8; set this to the
 params['verbose'] = True
 
 if __name__ == '__main__':
-	amst_align(raw_folder=raw_folder,
-    		pre_alignment_folder=pre_alignment_folder,
-    		target_folder=target_folder,
-    		**params)
+    amst_align(
+        raw_folder=raw_folder,
+        pre_alignment_folder=pre_alignment_folder,
+        target_folder=target_folder,
+        **params)
