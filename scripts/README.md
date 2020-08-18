@@ -43,7 +43,7 @@ Runs the very basic version of AMST. For a more custom setting refer to the exam
 
     $ cd /path/to/amst/scripts/
     $ conda activate amst-env
-    (amst-env)$ run_amst.py --raw_folder /path --pre_alignment_folder /path --target_folder /path [optional parameters]
+    (amst-env)$ python run_amst.py --raw_folder /path --pre_alignment_folder /path --target_folder /path [optional parameters]
 
 ### parameters and defaults
 
