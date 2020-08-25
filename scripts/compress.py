@@ -1,47 +1,49 @@
 
 import numpy as np
 
-from .tif_stack_processing.data_modification import data_modification_pipeline
+from tif_stack_processing.data_modification import data_modification_pipeline
 
-import argparse
+if __name__ == '__main__':
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--target_folder', type=str, default=None)
-parser.add_argument('--source_folder', type=str, default=None)
-parser.add_argument('--pattern', type=str, default='*.tif')
-parser.add_argument('--z_range', type=int, default=[None, None], nargs='+')
-parser.add_argument('--compression', type=int, default=9)
-parser.add_argument('--n_workers', type=int, default=8)
-parser.add_argument('--verbose', type=int, default=0)
+    import argparse
 
-args = parser.parse_args()
-target_folder = args.target_folder
-source_folder = args.source_folder
-pattern = args.pattern
-n_workers = args.n_workers
-verbose = args.verbose
-if len(args.z_range) == 2:
-    zr0 = args.z_range[0]
-    zr1 = args.z_range[1]
-elif len(args.z_range) == 1:
-    zr0 = args.z_range[0]
-    zr1 = None
-else:
-    raise RuntimeError
-z_range = np.s_[zr0: zr1]
-compression = args.compression
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--target_folder', type=str, default=None)
+    parser.add_argument('--source_folder', type=str, default=None)
+    parser.add_argument('--pattern', type=str, default='*.tif')
+    parser.add_argument('--z_range', type=int, default=[None, None], nargs='+')
+    parser.add_argument('--compression', type=int, default=9)
+    parser.add_argument('--n_workers', type=int, default=8)
+    parser.add_argument('--verbose', type=int, default=1)
 
-assert source_folder is not None
-assert target_folder is not None
+    args = parser.parse_args()
+    target_folder = args.target_folder
+    source_folder = args.source_folder
+    pattern = args.pattern
+    n_workers = args.n_workers
+    verbose = args.verbose
+    if len(args.z_range) == 2:
+        zr0 = args.z_range[0]
+        zr1 = args.z_range[1]
+    elif len(args.z_range) == 1:
+        zr0 = args.z_range[0]
+        zr1 = None
+    else:
+        raise RuntimeError
+    z_range = np.s_[zr0: zr1]
+    compression = args.compression
 
-data_modification_pipeline(
-    funcs=[],
-    params=[],
-    source_folder=source_folder,
-    target_folder=target_folder,
-    pattern=pattern,
-    compression=compression,
-    z_range=z_range,
-    n_workers=n_workers,
-    verbose=verbose
-)
+    assert source_folder is not None
+    assert target_folder is not None
+
+    data_modification_pipeline(
+        funcs=[],
+        params=[],
+        source_folder=source_folder,
+        target_folder=target_folder,
+        pattern=pattern,
+        compression=compression,
+        z_range=z_range,
+        n_workers=n_workers,
+        verbose=verbose
+    )
