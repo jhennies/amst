@@ -247,6 +247,7 @@ def pre_processing_generator(
         target_folder=None,
         raw_pattern='*.tif',
         pre_pattern='*.tif',
+        force_alignment=False,
         verbose=False
 ):
     # __________________________________________________________________________________________________________________
@@ -276,7 +277,7 @@ def pre_processing_generator(
                     # Return Nones for each slice that was already computed
                     if verbose:
                         print('{} already exists, nothing to do...'.format(os.path.split(im_list_raw[idx])[1]))
-                    return None, None, None, None
+                    return None, None, None, None, None
             # Load the raw data slice
             im = imread(im_list_raw[idx])
             assert im.dtype in ['uint8', 'uint16'], 'Only the data types uint8 and uint16 are supported!'
@@ -285,7 +286,7 @@ def pre_processing_generator(
             # Return Nones for each missing slice to fill up the batch
             if verbose:
                 print('Filling up batch...')
-            return None, None, None, None
+            return None, None, None, None, None
 
         # Start end end indices for the median filter, idx being the current slice position in the center
         start_id = idx - median_radius
@@ -313,21 +314,37 @@ def pre_processing_generator(
         # that are zero and padding it with zeros to the size of the template image
         # We are assuming here that the template data slices are larger than the non-zero region of interest in the raw
         # data.
-        if im.shape != median_z.shape:
+        template_shape = median_z.shape
+        if im.shape != template_shape:
             try:
                 bounds = _crop_zero_padding(im)
                 cropped_im = im[bounds]
-                t_im = np.zeros(median_z.shape, dtype=im.dtype)
+                t_im = np.zeros(template_shape, dtype=im.dtype)
 
                 t_im[0:cropped_im.shape[0], 0:cropped_im.shape[1]] = cropped_im
                 im = t_im
             except ValueError as e:
                 # This happened when a white slice was present (no zero pixel)
                 warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
-                print('This happens if a completely black slice is present in the data. ')
-                print('Affected slice: {}'.format(im_list_raw[idx]))
-                print('Replacing with empty slice ...')
-                im = np.zeros(median_z.shape, dtype=im.dtype)
+
+                if force_alignment:
+                    print('Trying to force the alignment')
+                    # Handling the case that the template dataset (i.e. median_z) is smaller than the cropped raw
+                    # input (im) in at least one dimension.
+                    if np.max(np.sum((cropped_im.shape, -np.array(template_shape)), axis=0) > 0):
+                        print('At least in one dimension the raw data crop is larger than a template dataset slice.')
+                        print('Fixing this ...')
+                        t_im = np.zeros(np.max((template_shape, cropped_im.shape), axis=0), dtype=im.dtype)
+                        t_im[0:cropped_im.shape[0], 0:cropped_im.shape[1]] = cropped_im
+                        im = t_im
+                        median_z_new = np.zeros(np.max((template_shape, cropped_im.shape), axis=0), dtype=median_z.dtype)
+                        median_z_new[0: template_shape[0], 0: template_shape[1]] = median_z
+                        median_z = median_z_new
+                else:
+                    # print('This happens if a completely black slice is present in the data. ')
+                    print('Affected slice: {}'.format(im_list_raw[idx]))
+                    print('Replacing with empty slice ...')
+                    im = np.zeros(template_shape, dtype=im.dtype)
 
         # Gaussian smooth the image and the median_z for the SIFT step
         if sift_sigma is not None:
@@ -357,7 +374,7 @@ def pre_processing_generator(
         assert im_smooth.dtype == 'uint8'
         assert median_z.dtype == 'uint8'
         assert median_z_smooth.dtype == 'uint8'
-        return im, im_smooth, median_z, median_z_smooth
+        return im, im_smooth, median_z, median_z_smooth, template_shape
         # --------------------------------------------------------------------------------------------------------------
 
     # __________________________________________________________________________________________________________________
@@ -423,6 +440,7 @@ def pre_processing_generator(
         raw_crop_smooth = prepared_data[1].tolist()
         templates_med = prepared_data[2].tolist()
         templates_med_smooth = prepared_data[3].tolist()
+        final_shape = prepared_data[4].tolist()
 
         # Determine file names (to later save the results with the same filename
         names = [os.path.split(im_list_raw[idx])[1]
@@ -430,7 +448,7 @@ def pre_processing_generator(
                  for idx in range(batch_idx, batch_idx + n_workers)]
 
         # Yield the batch
-        yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, names
+        yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, names, final_shape
 
 
 def _xcorr_on_pair(fixed, moving, devicetype, verbose=False):
@@ -532,9 +550,12 @@ def _register_with_elastix(fixed, moving,
     return result.astype(moving.dtype)
 
 
-def _write_result(filepath, image, compression=0):
+def _write_result(filepath, image, compression=0, shape=None):
     print('Writing result in {}'.format(filepath))
-    imsave(filepath, image, compress=compression)
+    if shape is None:
+        imsave(filepath, image, compress=compression)
+    else:
+        imsave(filepath, image[0:shape[0], 0:shape[1]], compress=compression)
 
 
 def amst_align(
@@ -554,7 +575,8 @@ def amst_align(
         write_intermediates=False,
         raw_pattern='*.tif',
         pre_pattern='*.tif',
-        compression=0
+        compression=0,
+        force_alignment=False
 ):
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
@@ -566,7 +588,7 @@ def amst_align(
 
     # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
     # The slices in each batch of data are generated in parallel
-    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names in pre_processing_generator(
+    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names, final_shapes in pre_processing_generator(
             raw_folder,
             pre_alignment_folder,
             median_radius=median_radius,
@@ -577,6 +599,7 @@ def amst_align(
             target_folder=target_folder,
             raw_pattern=raw_pattern,
             pre_pattern=pre_pattern,
+            force_alignment=force_alignment,
             verbose=verbose
     ):
         if coarse_alignment is not None:
@@ -700,7 +723,7 @@ def amst_align(
                 if task is not None else None
                 for task in tasks]
         else:
-            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx], compression)
+            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx], compression, final_shapes[idx])
             if raws_crop[idx] is not None else None
             for idx in range(len(raws_crop))
             ]
