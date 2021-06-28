@@ -15,6 +15,18 @@ import pyelastix
 from skimage.feature import register_translation
 from skimage import filters
 
+try:
+    from pybdv.util import open_file
+    from pybdv.util import get_key
+    from pybdv.bdv_datasets import BdvDataset
+    from pybdv.converter import normalize_output_path
+    from pybdv.metadata import write_n5_metadata, write_h5_metadata, write_xml_metadata, validate_attributes
+    from pybdv.metadata import get_resolution, get_size
+except ImportError:
+    print('No BDV/HDF5 support available, consider installing pybdv')
+    open_file = None
+    get_key = None
+
 
 # To check which device the SIFT runs on
 print('Running SIFT on ' + sift.SiftPlan(shape=(10, 10)).ctx.devices[0].name)
@@ -204,6 +216,7 @@ def optimized_elastix_params():
 
     return params
 
+
 def xcorr(offset_image, image):
     image = gaussianSmoothing(image, 1)
     offset_image = gaussianSmoothing(offset_image, 1)
@@ -211,6 +224,7 @@ def xcorr(offset_image, image):
     offset_image = filters.sobel(offset_image)
     shift, error, diffphase = register_translation(image, offset_image, 100)
     return (shift[1], shift[0])
+
 
 def default_amst_params():
 
@@ -236,6 +250,19 @@ def default_amst_params():
     )
 
 
+def _crop_zero_padding(dat):
+    # argwhere will give you the coordinates of every non-zero point
+    true_points = np.argwhere(dat)
+    # take the smallest points and use them as the top left of your crop
+    top_left = true_points.min(axis=0)
+    # take the largest points and use them as the bottom right of your crop
+    bottom_right = true_points.max(axis=0)
+    # generate bounds
+    bounds = np.s_[top_left[0]:bottom_right[0] + 1,  # plus 1 because slice isn't
+             top_left[1]:bottom_right[1] + 1]  # inclusive
+    return bounds
+
+
 def pre_processing_generator(
         raw_folder,
         pre_alignment_folder,
@@ -252,18 +279,6 @@ def pre_processing_generator(
 ):
     # __________________________________________________________________________________________________________________
     # Helper functions
-
-    def _crop_zero_padding(dat):
-        # argwhere will give you the coordinates of every non-zero point
-        true_points = np.argwhere(dat)
-        # take the smallest points and use them as the top left of your crop
-        top_left = true_points.min(axis=0)
-        # take the largest points and use them as the bottom right of your crop
-        bottom_right = true_points.max(axis=0)
-        # generate bounds
-        bounds = np.s_[top_left[0]:bottom_right[0] + 1,  # plus 1 because slice isn't
-                 top_left[1]:bottom_right[1] + 1]  # inclusive
-        return bounds
 
     def _prepare_data(idx, batch_idx):
 
@@ -451,6 +466,253 @@ def pre_processing_generator(
         yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, names, final_shape
 
 
+def pre_processing_generator_h5(
+        raw,
+        pre_alignment,
+        median_radius=7,
+        sift_sigma=1.6,
+        sift_downsample=None,
+        n_workers=8,
+        compute_range=np.s_[:],
+        force_alignment=False,
+        verbose=False
+):
+
+    # __________________________________________________________________________________________________________________
+    # Helper functions
+
+    def _pre_load_batch(batch_idx, batch_shape, f_raw, f_pre, median_radius):
+
+        if verbose:
+            print('---------------------------')
+            print('_pre_load_batch')
+            print('')
+            print(f'batch_idx = {batch_idx}')
+            print(f'batch_shape = {batch_shape}')
+            print(f'median_radius = {median_radius}')
+
+        data_raw = f_raw[batch_idx: batch_idx + batch_shape]
+
+        start_idx_pre = batch_idx - median_radius
+        if start_idx_pre < 0:
+            start_id = median_radius + start_idx_pre
+            start_idx_pre = 0
+        else:
+            start_id = median_radius
+        data_pre = f_pre[start_idx_pre: batch_idx + batch_shape + median_radius]
+
+        if verbose:
+            print(f'data_raw.shape = {data_raw.shape}')
+            print(f'data_pre.shape = {data_pre.shape}')
+            print(f'start_id = {start_id}')
+
+            print('')
+            print('---------------------------')
+
+        return data_raw, data_pre, start_id
+
+    def _prepare_data(idx, data_raw, data_pre, start_id, batch_idx):
+        """
+        idx refers to the current slice in the current batch
+        data_raw is the raw batch data
+        data_pre is the pre-aligned data including padding
+        start_id defines where the batch data within the padded data is found
+        """
+
+        if verbose:
+            print('---------------------------')
+            print('_prepare_data')
+            print('')
+            print(f'idx = {idx}')
+            print(f'data_raw.shape = {data_raw.shape}')
+            print(f'data_pre.shape = {data_pre.shape}')
+            print(f'start_id = {start_id}')
+            print(f'batch_idx = {batch_idx}')
+
+        # --------------------------------------------------------------------------------------------------------------
+        # Preparation of the image data
+
+        # Determine whether we are already past the end of the full dataset
+        if data_raw.shape[0] <= idx:
+            # This happens if the number of images does not divide by the number of batches (smaller last batch)
+            # Return Nones for each missing slice to fill up the batch
+            if verbose:
+                print('Filling up batch...')
+                print('')
+                print('---------------------------')
+            return None, None, None, None, None
+
+        # TODO: Check whether the result exists
+        #   E.g. by adding an extra file with shape=(f_raw.shape[0],)
+
+        # Extract the raw data slice
+        if verbose:
+            print(f'Loading im = data_raw[{idx}, :]')
+        im = data_raw[idx, :]
+        if im.dtype == 'int16':
+            im = im.astype('uint8')
+
+        # Start end end indices for the median filter, idx being the current slice position in the center
+        start_med = start_id + idx - median_radius
+        if start_med < 0:
+            start_med = 0
+        end_med = start_id + idx + median_radius + 1
+
+        # Load the necessary data for the z-median filtered slice
+        if verbose:
+            print(f'Loading median_data = data_pre[{start_med}: {end_med}, :]')
+        median_data = data_pre[start_med: end_med, :]
+        # Do the median smoothing to obtain one composition image at the current z-position
+        median_z = np.median(median_data, axis=0).astype('uint8')
+
+        # The sift doesn't like images of different size. This fixes some cases by cropping away areas from the raw data
+        # that are zero and padding it with zeros to the size of the template image
+        # We are assuming here that the template data slices are larger than the non-zero region of interest in the raw
+        # data.
+        template_shape = median_z.shape
+        if im.shape != template_shape:
+            try:
+                bounds = _crop_zero_padding(im)
+                cropped_im = im[bounds]
+                t_im = np.zeros(template_shape, dtype=im.dtype)
+
+                t_im[0:cropped_im.shape[0], 0:cropped_im.shape[1]] = cropped_im
+                im = t_im
+            except ValueError as e:
+                # This happened when a white slice was present (no zero pixel)
+                warnings.warn('Cropping zero-padding failed with ValueError: {}'.format(str(e)))
+
+                if force_alignment:
+                    print('Trying to force the alignment')
+                    # Handling the case that the template dataset (i.e. median_z) is smaller than the cropped raw
+                    # input (im) in at least one dimension.
+                    if np.max(np.sum((cropped_im.shape, -np.array(template_shape)), axis=0) > 0):
+                        print('At least in one dimension the raw data crop is larger than a template dataset slice.')
+                        print('Fixing this ...')
+                        t_im = np.zeros(np.max((template_shape, cropped_im.shape), axis=0), dtype=im.dtype)
+                        t_im[0:cropped_im.shape[0], 0:cropped_im.shape[1]] = cropped_im
+                        im = t_im
+                        median_z_new = np.zeros(np.max((template_shape, cropped_im.shape), axis=0), dtype=median_z.dtype)
+                        median_z_new[0: template_shape[0], 0: template_shape[1]] = median_z
+                        median_z = median_z_new
+                else:
+                    # print('This happens if a completely black slice is present in the data. ')
+                    print('Affected slice: {}'.format(batch_idx + idx))
+                    print('Replacing with empty slice ...')
+                    im = np.zeros(template_shape, dtype=im.dtype)
+
+        # Gaussian smooth the image and the median_z for the SIFT step
+        if sift_sigma is not None:
+            median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
+            if im.dtype == 'uint8':
+                im_smooth = gaussianSmoothing(im, sift_sigma)
+            else:
+                # vigra.gaussianSmoothing cannot handle 16 bit data
+                im_smooth = gaussianSmoothing(im.astype('float32'), sift_sigma)
+                # The data for the sift step does not require to be 16 bit
+                im_smooth = (im_smooth / (2 ** 16) * (2 ** 8)).astype('uint8')
+        else:
+            median_z_smooth = median_z.copy()
+            im_smooth = im.copy()
+            if im_smooth.dtype == 'uint16':
+                # The data for the sift step does not require to be 16 bit
+                im_smooth = (im_smooth.astype('float32') / (2 ** 16) * (2 ** 8)).astype('uint8')
+
+        # Downsample for SIFT step for speed-up of computation
+        if sift_downsample is not None:
+            median_z_smooth = downscale_local_mean(median_z_smooth, sift_downsample).astype('uint8')
+            im_smooth = downscale_local_mean(im_smooth, sift_downsample).astype('uint8')
+
+        if verbose:
+            print('')
+            print('---------------------------')
+
+        # --------------------------------------------------------------------------------------------------------------
+        # Return the results
+        assert im.dtype in ['uint8', 'uint16'], f'Invalid data type: {im.dtype}'
+        assert im_smooth.dtype == 'uint8'
+        assert median_z.dtype == 'uint8'
+        assert median_z_smooth.dtype == 'uint8'
+        return im, im_smooth, median_z, median_z_smooth, template_shape
+        # --------------------------------------------------------------------------------------------------------------
+
+    # __________________________________________________________________________________________________________________
+    # Main loop which yields the batches of data
+
+    # Assert that the input folders actually exist
+    assert os.path.exists(raw), \
+        'The raw dataset does not exist. \n' \
+        'Ensure the raw_folder input points to the correct location.'
+    assert os.path.exists(pre_alignment), \
+        'The pre alignment does not exist. \n' \
+        'Ensure the pre_alignment_folder input points to the correct location.'
+
+    # Open the datasets
+    f_raw = open_file(raw, mode='r')[get_key(True, 0, 0, 0)]
+    f_pre = open_file(pre_alignment, mode='r')[get_key(True, 0, 0, 0)]
+
+    # TODO Do I need something like this here?
+    # # Find the tif files in the respective directories for the raw data and the pre-alignment
+    # im_list_raw = np.sort(glob(os.path.join(raw_folder, raw_pattern)))[compute_range]
+    # im_list_pre = np.sort(glob(os.path.join(pre_alignment_folder, pre_pattern)))[compute_range]
+
+    # Warning for different numbers of tif slices in raw and pre-align folders
+    if f_raw.shape[0] != f_pre.shape[0]:
+        warnings.warn('Number of slices in the raw and pre-alignment datasets do not match. \n'
+                      'This is not necessarily an error but indicates that you might want to consider revising your inputs.')
+
+    for batch_idx in range(0, f_raw.shape[0], n_workers):
+
+        print('batch_idx = {}'.format(batch_idx))
+        # --------------------------------------------------------------------------------------------------------------
+        # Generate the median smoothed template
+        if verbose:
+            print('Generating median smoothed templates...')
+
+        # Pre-load the data block of this batch including the respective padding for the median smoothing
+        data_raw, data_pre, start_id = _pre_load_batch(batch_idx, n_workers, f_raw, f_pre, median_radius)
+
+        # Within the here called function the data is loaded and median smoothed.
+        # Multi-threading to speed things up
+        # The template data variable enables access to already loaded slices which were needed for median computation at
+        # a previous position
+        if n_workers > 1:
+
+            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+
+                tasks = [
+                    tpe.submit(
+                        _prepare_data,
+                        *(idx, data_raw, data_pre, start_id, batch_idx)
+                    )
+                    for idx in range(n_workers)
+                ]
+
+            prepared_data = [task.result() for task in tasks]
+
+        else:
+            prepared_data = [
+                _prepare_data(idx, data_raw, data_pre, start_id, batch_idx)
+                for idx in range(n_workers)
+            ]
+        # prepared_data contains a list for every loaded slice including raw data, raw_data for the sift,
+        # median z-smoothed data, and median z-smoothed data for the sift
+
+        # This now needs to be reshaped properly
+        prepared_data = np.swapaxes(np.array(prepared_data), 0, 1)
+        raw_crop = prepared_data[0].tolist()
+        raw_crop_smooth = prepared_data[1].tolist()
+        templates_med = prepared_data[2].tolist()
+        templates_med_smooth = prepared_data[3].tolist()
+        final_shape = prepared_data[4].tolist()
+
+        # Names is now just the batch idx (essentially the position of the batch in the target data)
+        names = batch_idx
+
+        # Yield the batch
+        yield templates_med, templates_med_smooth, raw_crop, raw_crop_smooth, names, final_shape
+
+
 def _xcorr_on_pair(fixed, moving, devicetype, verbose=False):
     h, w = fixed.shape
     h2, w2 = moving.shape
@@ -558,6 +820,119 @@ def _write_result(filepath, image, compression=0, shape=None):
         imsave(filepath, image[0:shape[0], 0:shape[1]], compress=compression)
 
 
+def write_batch(target_folder, names, ims, final_shapes, compression, n_workers, verbose=False):
+    # Write the results in parallel
+    if n_workers > 1:
+        with Pool(processes=n_workers) as p:
+            tasks = [
+                p.apply_async(
+                    _write_result, (
+                        os.path.join(target_folder, names[idx]), ims[idx], compression
+                    )
+                )
+                if ims[idx] is not None else None
+                for idx in range(len(ims))
+            ]
+            [task.get()
+             if task is not None else None
+             for task in tasks
+             ]
+    else:
+        [_write_result(os.path.join(target_folder, names[idx]), ims[idx], compression, final_shapes[idx])
+         if ims[idx] is not None else None
+         for idx in range(len(ims))
+         ]
+
+
+def write_batch_h5(bdv_dataset, zpos, raws_crop, final_shapes, compression, n_workers, verbose=False):
+
+    if verbose:
+        print(f'bdv_dataset = {bdv_dataset}')
+        print(f'zpos = {zpos}')
+        print(f'len(raws_crop) = {len(raws_crop)}')
+    raws_crop = np.array([x for x in raws_crop if x is not None])
+    bdv_dataset[
+        zpos: zpos + raws_crop.shape[0],
+        0: raws_crop.shape[1],
+        0: raws_crop.shape[2]
+    ] = raws_crop
+
+
+def create_empty_bdv_dataset(
+        data_path, setup_id, timepoint,
+        data_shape,
+        data_dtype='uint8',
+        chunks=None,
+        scale_factors=None,
+        resolution=(1., 1., 1.),
+        unit='pixel',
+        setup_name=None,
+        attributes=None,
+        verbose=False
+):
+
+    if verbose:
+        print('data_shape = {}'.format(data_shape))
+        print('resolution = {}'.format(resolution))
+        print('unit = {}'.format(unit))
+
+    data_path, xml_path, is_h5 = normalize_output_path(data_path)
+    if verbose:
+        print('data_path = {}'.format(data_path))
+        print('xml_path = {}'.format(xml_path))
+        print('is_h5 = {}'.format(is_h5))
+
+    if attributes is None:
+        attributes = {'channel': {'id': None}}
+
+    # validate the attributes
+    enforce_consistency = True
+    attributes_ = validate_attributes(xml_path, attributes, setup_id, enforce_consistency)
+
+    base_key = get_key(is_h5, timepoint=timepoint, setup_id=setup_id, scale=0)
+    with open_file(data_path, 'a') as f:
+
+        # Create the full sized dataset
+        f.create_dataset(base_key, shape=data_shape, compression='gzip',
+                         chunks=chunks, dtype=data_dtype)
+
+        # Create additional scales
+        factors = []
+        if scale_factors is not None:
+
+            factor = np.array([1, 1, 1])
+            factors.append(factor.tolist())
+
+            for scale_id, scale_factor in enumerate(scale_factors):
+
+                factor *= np.array(scale_factor)
+                factors.append(scale_factor)
+
+                base_key = get_key(is_h5, timepoint=timepoint, setup_id=setup_id, scale=scale_id + 1)
+
+                f.create_dataset(base_key, shape=(np.array(data_shape) / factor).astype(int),
+                                 compression='gzip', chunks=chunks, dtype=data_dtype)
+
+    if is_h5:
+        write_h5_metadata(data_path, factors, setup_id, timepoint, overwrite=False)
+    else:
+        write_n5_metadata(data_path, factors, resolution, setup_id, timepoint, overwrite=False)
+
+    # write bdv xml metadata
+    write_xml_metadata(xml_path, data_path, unit,
+                       resolution, is_h5,
+                       setup_id=setup_id,
+                       timepoint=timepoint,
+                       setup_name=setup_name,
+                       affine=None,
+                       attributes=attributes_,
+                       overwrite=False,
+                       overwrite_data=False,
+                       enforce_consistency=enforce_consistency)
+
+    return False
+
+
 def amst_align(
         raw_folder,
         pre_alignment_folder,
@@ -578,17 +953,20 @@ def amst_align(
         compression=0,
         force_alignment=False
 ):
-    if not os.path.exists(target_folder):
-        os.mkdir(target_folder)
-    if write_intermediates:
-        if not os.path.exists(os.path.join(target_folder, 'sift')):
-            os.mkdir(os.path.join(target_folder, 'sift'))
-        if not os.path.exists(os.path.join(target_folder, 'refs')):
-            os.mkdir(os.path.join(target_folder, 'refs'))
 
-    # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
-    # The slices in each batch of data are generated in parallel
-    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names, final_shapes in pre_processing_generator(
+    if os.path.isdir(raw_folder):
+
+        target = target_folder
+
+        if not os.path.exists(target_folder):
+            os.mkdir(target_folder)
+        if write_intermediates:
+            if not os.path.exists(os.path.join(target_folder, 'sift')):
+                os.mkdir(os.path.join(target_folder, 'sift'))
+            if not os.path.exists(os.path.join(target_folder, 'refs')):
+                os.mkdir(os.path.join(target_folder, 'refs'))
+
+        gen = pre_processing_generator(
             raw_folder,
             pre_alignment_folder,
             median_radius=median_radius,
@@ -601,7 +979,54 @@ def amst_align(
             pre_pattern=pre_pattern,
             force_alignment=force_alignment,
             verbose=verbose
-    ):
+        )
+        write = write_batch
+
+    elif os.path.splitext(raw_folder)[1] == '.h5':
+
+        gen = pre_processing_generator_h5(
+            raw_folder,
+            pre_alignment_folder,
+            median_radius=median_radius,
+            sift_sigma=sift_sigma,
+            sift_downsample=sift_downsample,
+            n_workers=n_workers,
+            compute_range=compute_range,
+            force_alignment=force_alignment,
+            verbose=verbose
+        )
+        write = write_batch_h5
+        # We also need to create and open a BDV dataset here
+        pre_xml_path = os.path.splitext(pre_alignment_folder)[0] + '.xml'
+        target_shape = get_size(pre_xml_path, 0)
+        target_resolution = get_resolution(pre_xml_path, 0)
+        create_empty_bdv_dataset(
+            target_folder, 0, 0,
+            target_shape,
+            'uint8',
+            scale_factors=[[2, 2, 2], [2, 2, 2]],
+            resolution=target_resolution,
+            unit='micrometer',
+            chunks=(1, 512, 512),
+            verbose=verbose
+        )
+        target = BdvDataset(target_folder, 0, 0, 'mean', n_workers, verbose=verbose)
+
+    else:
+        raise ValueError('Invalid input data')
+
+    # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
+    # The slices in each batch of data are generated in parallel
+    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names, final_shapes in gen:
+
+        if verbose:
+            print(f'len(templates_med) = {len(templates_med)}')
+            print(f'len(templates_med_smooth) = {len(templates_med_smooth)}')
+            print(f'len(raws_crop) = {len(raws_crop)}')
+            print(f'len(raws_crop_smooth) = {len(raws_crop_smooth)}')
+            print(f'names = {names}')
+            print(f'final_shape = {final_shapes}')
+
         if coarse_alignment is not None:
             if coarse_alignment == 'SIFT':
                 print('Coarse alignment by translation done with SIFT.')
@@ -699,7 +1124,7 @@ def amst_align(
         # Register with ELASTIX with one thread, as it is parallelized internally
         raws_crop = [
             _register_with_elastix(
-                templates_med[idx], raws_crop[idx], name=names[idx],
+                templates_med[idx], raws_crop[idx], name=names[idx] if type(names) == list else None,
                 elastix_params=elastix_params, verbose=verbose
             )
             if raws_crop[idx] is not None else None
@@ -707,58 +1132,64 @@ def amst_align(
         ]
         del templates_med
 
-        # Write the results in parallel
-        if n_workers > 1:
-            with Pool(processes=n_workers) as p:
-                tasks = [
-                    p.apply_async(
-                        _write_result, (
-                            os.path.join(target_folder, names[idx]), raws_crop[idx], compression
-                        )
-                    )
-                    if raws_crop[idx] is not None else None
-                    for idx in range(len(raws_crop))
-                ]
-                [task.get()
-                if task is not None else None
-                for task in tasks]
-        else:
-            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx], compression, final_shapes[idx])
-            if raws_crop[idx] is not None else None
-            for idx in range(len(raws_crop))
-            ]
+        # Write the results
+        write(
+            target,
+            names,
+            raws_crop,
+            final_shapes,
+            compression,
+            n_workers,
+            verbose=verbose
+        )
 
-    
 
 if __name__ == '__main__':
 
-    import time
-    start = time.time()
+    # import time
+    # start = time.time()
+    #
+    # experiment_name = 'amst_191119_00_implementation_test'
+    # project_name = 'amst_191119_00_implementation_tests'
+    #
+    # raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
+    # pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
+    # target = os.path.join(
+    #     '/data/phd_project/image_analysis/alignment/fast_amst/',
+    #     project_name,
+    #     experiment_name
+    # )
+    #
+    # params = default_amst_params()
+    #
+    # params['n_workers'] = 12
+    # # For debugging
+    # params['compute_range'] = np.s_[417:687]
+    #
+    # amst_align(
+    #     raw_folder=raw,
+    #     pre_alignment_folder=pre,
+    #     target_folder=target,
+    #     verbose=False,
+    #     **params
+    # )
+    #
+    # end = time.time()
+    # print('Time elapsed: {}s'.format(end - start))
 
-    experiment_name = 'amst_191119_00_implementation_test'
-    project_name = 'amst_191119_00_implementation_tests'
+    raw = '/data/project_galaxy_amst/datasets/20140801_hela_amst_test_set_small/raw_8bit.h5'
+    pre = '/data/project_galaxy_amst/datasets/20140801_hela_amst_test_set_small/template_match_aligned.h5'
 
-    raw = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/raw_8bit'
-    pre = '/data/datasets/20140801_hela-wt_xy5z8nm_as_full_8bit/template_match_aligned/'
-    target = os.path.join(
-        '/data/phd_project/image_analysis/alignment/fast_amst/',
-        project_name,
-        experiment_name
-    )
+    target = '/data/project_galaxy_amst/datasets/20140801_hela_amst_test_set_small/tmp_amst_test.h5'
 
     params = default_amst_params()
 
-    params['n_workers'] = 12
-    # For debugging
-    params['compute_range'] = np.s_[417:687]
+    params['n_workers'] = 8
+    params['verbose'] = True
 
     amst_align(
         raw_folder=raw,
         pre_alignment_folder=pre,
         target_folder=target,
-        verbose=False,
         **params
     )
-
-    end = time.time()
-    print('Time elapsed: {}s'.format(end - start))

@@ -112,6 +112,30 @@ Create a new environment:
 
 Additionally, check the potential issues specified below.
 
+#### Installation update
+
+not entirely tested though:
+
+    conda create --name amst-env -c conda-forge numpy tifffile scikit-image vigra
+    pip install pyelastix
+    conda install -c conda-forge silx[full] pyopencl
+
+Then, for GPU support:
+
+    conda install -c conda-forge ocl-icd-system
+
+or
+
+    conda install -c conda-forge pocl
+
+For running SIFT on the CPU
+
+Optional:
+
+    conda install -c conda-forge -c cpape pybdv
+
+The relevant issues below seem not to persist anymore, it should work like this!
+
 ### Installation on linux with environment file
 
 Open a terminal/command line and navigate to the AMST package:

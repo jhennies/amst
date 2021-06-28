@@ -7,6 +7,7 @@ example_usage.py script
 
 import sys
 sys.path.append('C:\\Users\\TEAM\\src\\new_amst\\amst')
+sys.path.append('/data/project_galaxy_amst/src/amst')
 
 from amst_linux.amst_main import amst_align, default_amst_params
 import argparse
