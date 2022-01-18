@@ -112,6 +112,17 @@ Create a new environment:
 
 Additionally, check the potential issues specified below.
 
+### Manual installation on linux new:
+
+Note: This is not fully tested yet!
+
+    conda create -n amst-env -c conda-forge tifffile scikit-image vigra silx[full] pyopencl
+
+To make the GPU accessible
+
+    conda activate amst-env
+    conda install -c conda-forge ocl-icd-system
+
 ### Installation on linux with environment file
 
 Open a terminal/command line and navigate to the AMST package:

@@ -96,6 +96,7 @@ def offsets_with_xcorr(
         threshold=0,
         sigma=1.,
         compression=0,
+        return_sequential=False,
         n_workers=1,
         verbose=0
 ):
@@ -118,26 +119,28 @@ def offsets_with_xcorr(
             ]
         offsets = [task.result() for task in tasks]
 
-    print('Sequentializing offsets ...')
-    seq_offsets = _sequentialize_offsets(offsets)
+    if target_folder is not None or return_sequential:
 
-    if verbose:
-        plt.plot(offsets)
-        plt.figure()
-        plt.plot(seq_offsets)
+        print('Sequentializing offsets ...')
+        seq_offsets = _sequentialize_offsets(offsets)
 
-    if subtract_running_average:
-        print('Subtracting running average ...')
-        seq_offsets = _subtract_running_average(seq_offsets, subtract_running_average)
+        if verbose:
+            plt.plot(offsets)
+            plt.figure()
+            plt.plot(seq_offsets)
 
-    if verbose:
-        plt.figure()
-        plt.plot(seq_offsets)
-        plt.show()
+        if subtract_running_average:
+            print('Subtracting running average ...')
+            seq_offsets = _subtract_running_average(seq_offsets, subtract_running_average)
 
-    print('Displacing and saving slices ...')
+        if verbose:
+            plt.figure()
+            plt.plot(seq_offsets)
+            plt.show()
 
     if target_folder is not None:
+
+        print('Displacing and saving slices ...')
 
         if n_workers == 1:
             for im_idx, im_filepath in enumerate(im_list):
@@ -162,7 +165,10 @@ def offsets_with_xcorr(
                 ]
             [task.result() for task in tasks]
 
-    return offsets
+    if return_sequential:
+        return seq_offsets
+    else:
+        return offsets
 
 
 if __name__ == '__main__':

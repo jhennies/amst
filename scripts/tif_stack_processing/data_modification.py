@@ -8,6 +8,15 @@ from glob import glob
 from matplotlib import pyplot as plt
 
 
+def to8bit(im):
+    assert im.dtype == 'uint16', 'Only implemented for 16bit data!'
+    im = im.astype('float32')
+    im /= 2 ** 16
+    im *= 2 ** 8
+    im = im.astype('uint8')
+    return im
+
+
 def clip_values(im, min_value, max_value):
     assert im.dtype == 'uint8', 'Only implemented for 8bit data!'
     im = im.astype('float32')
@@ -35,19 +44,44 @@ def background_white_to_black(im, kernel_size):
     return im - mask
 
 
-def _wrap_slice(funcs, params, source_filepath, target_folder, compression, verbose):
+def _evaluate_params(params):
+    if params == 'None':
+        return []
+    params = params.split(',')
+    return_params = []
+    for idx, param in enumerate(params):
+        try:
+            return_params.append(float(param))
+        except ValueError:
+            return_params.append(param)
+
+    return return_params
+
+
+def _wrap_slice(funcs, params, source_filepath, target_folder, compression, verbose=False):
 
     target_filepath = os.path.join(
         target_folder,
         os.path.split(source_filepath)[1]
     )
-    if verbose:
-        print(target_filepath)
+    print(target_filepath)
 
     im = imread(source_filepath)
 
-    for fid, func in enumerate(funcs):
-        im = func(im, *params[fid])
+    if funcs is not None:
+        if verbose:
+            print(f'params = {params}')
+        for fid, func in enumerate(funcs):
+            p = params[fid]
+            if verbose:
+                print(f'p = {p}')
+            if type(p) == str:
+                p = _evaluate_params(p)
+            if verbose:
+                print(f'p = {p}')
+            if type(func) == str:
+                func = eval(func)
+            im = func(im, *p)
 
     imsave(target_filepath, data=im, compress=compression)
 
@@ -60,8 +94,8 @@ def data_modification_pipeline(
         pattern='slice*.tif',
         compression=9,
         z_range=np.s_[:],
-        n_workers=1,
-        verbose=1
+        n_workers=os.cpu_count(),
+        verbose=False
 
 ):
     assert source_folder != target_folder, 'The results folder must differ from the input folder!'
@@ -69,8 +103,8 @@ def data_modification_pipeline(
         os.mkdir(target_folder)
 
     im_list = sorted(glob(os.path.join(source_folder, pattern)))[z_range]
-    if verbose:
-        print(im_list)
+    # if verbose:
+    #     print(im_list)
 
     if n_workers == 1:
 
