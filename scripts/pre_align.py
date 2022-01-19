@@ -24,31 +24,41 @@ def pre_align(
         target_folder,
         xy_range=np.s_[:],
         z_range=np.s_[:],
-        threshold=0,
-        sigma=1.,
+        xcorr_threshold=0,
+        xcorr_mask_range=None,
+        xcorr_sigma=1.,
+        template=None,
+        tm_threshold=0,
+        tm_sigma=0,
         n_workers=os.cpu_count(),
+        rerun=False,
         verbose=False
 ):
 
-    from .pre_alignments.xcorr import offsets_with_xcorr
-    from .pre_alignments.tm import offsets_with_tm
+    from pre_alignments.xcorr import offsets_with_xcorr
+    from pre_alignments.tm import offsets_with_tm
 
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
     cache_folder = os.path.join(target_folder, 'cache')
     if not os.path.exists(cache_folder):
         os.mkdir(cache_folder)
+
+    # Cross correlation alignment
     offsets_xcorr_fp = os.path.join(cache_folder, 'offsets_xcorr.pkl')
 
-    if not os.path.exists(offsets_xcorr_fp):
+    if rerun or not os.path.exists(offsets_xcorr_fp):
         offsets_xcorr = offsets_with_xcorr(
             source_folder,
-            target_folder=None,  # We don't need to save the result
+            target_folder=os.path.join(cache_folder, 'xcorr_applied') if verbose else None,  # We don't need to save the result
             xy_range=xy_range,
             z_range=z_range,
+            subpixel_displacements=True,  # Used in verbose mode to displace the slices
             subtract_running_average=0,  # Has to be switched off
-            threshold=threshold,  # Defines the relevant grey value range (can be tuple to define upper and lower bound)
-            sigma=sigma,  # Gaussian smoothing before xcorr computation
+            threshold=xcorr_threshold,  # Defines the relevant grey value range (can be tuple to define upper and lower bound)
+            mask_range=xcorr_mask_range,  # Similar to threshold, but puts everything above the upper bound to zero
+            sigma=xcorr_sigma,  # Gaussian smoothing before xcorr computation
+            compression=9,  # Used in verbose mode to displace the slices
             return_sequential=True,
             n_workers=n_workers,
             verbose=verbose
@@ -62,38 +72,67 @@ def pre_align(
     if verbose:
         print(f'offsets_xcorr = {offsets_xcorr}')
 
-    raise(RuntimeError('Pre-mature end...'))
+    # Template matching alignment
+    if template is None:
+        print(f'Skipping template matching!')
 
-    # TODO: this function
-    offsets_tm = offsets_with_tm(
-        source_folder,
-        target_folder=target_folder,
-        xy_range=
-    )
+    else:
 
-    # TODO: Implement smoothing of tm offsets (functionality of smooth displace)
+        offsets_tm_fp = os.path.join(cache_folder, 'offsets_tm.pkl')
+        if rerun or not os.path.exists(offsets_tm_fp):
 
-    # TODO: The final offsets according to the formula OFFSETS = XCORR + smoothed(TM - XCORR)
-    offsets = offsets_xcorr + _smooth_offsets(offsets_tm - offsets_xcorr)
+            # TODO: this function
+            offsets_tm = offsets_with_tm(
+                source_folder,
+                template,
+                target_folder=target_folder,
+                xy_range=None,
+                z_range=z_range,
+                subpixel_displacements=True,
+                threshold=tm_threshold,
+                sigma=tm_sigma,
+                compression=9,
+                n_workers=n_workers,
+                verbose=verbose
+            )
+
+            with open(offsets_tm_fp, mode='wb') as f:
+                pickle.dump(offsets_tm, f)
+        else:
+            with open(offsets_tm_fp, mode='rb') as f:
+                offsets_tm = pickle.load(f)
+
+        raise(RuntimeError('Pre-mature end...'))
+
+        # TODO: Implement smoothing of tm offsets (functionality of smooth displace)
+
+        # TODO: The final offsets according to the formula OFFSETS = XCORR + smoothed(TM - XCORR)
+        offsets = offsets_xcorr + _smooth_offsets(offsets_tm - offsets_xcorr)
 
     # TODO: Apply offsets
     _apply_offsets(offsets)
 
-    return offsets
+    return offsetss.cpu_count()
 
 
 if __name__ == '__main__':
 
-    source_folder = '/media/julian/Data/datasets/20140801_hela-wt_xy5z8nm_as/140801_HPF_Gal_1'
+    source_folder = '/media/julian/Data/datasets/20140801_hela-wt_xy5z8nm_as/140801_HPF_Gal_1_8bit/'
     target_folder = '/media/julian/Data/projects/misc/amst_devel/test_pre_merge/'
+    template_fp = '/media/julian/Data/projects/misc/amst_devel/test_pre_merge/template.tif'
 
     pre_align(
         source_folder,
         target_folder,
         xy_range=np.s_[:],
-        z_range=np.s_[:100],
-        threshold=0,
-        sigma=1.,
+        z_range=np.s_[:],
+        xcorr_threshold=0,
+        xcorr_mask_range=[80, -50],
+        xcorr_sigma=1.,
+        template=template_fp,
+        tm_threshold=[190, 255],
+        tm_sigma=0,
         n_workers=os.cpu_count(),
+        rerun=False,
         verbose=True
     )

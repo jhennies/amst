@@ -116,12 +116,14 @@ Additionally, check the potential issues specified below.
 
 Note: This is not fully tested yet!
 
-    conda create -n amst-env -c conda-forge tifffile scikit-image vigra silx[full] pyopencl
+    conda create -n amst-env -c conda-forge tifffile scikit-image=0.17.2 vigra silx[full] pyopencl
 
 To make the GPU accessible
 
     conda activate amst-env
     conda install -c conda-forge ocl-icd-system
+
+TODO: Remove dependency on skimage's register_translation to make scikit-image upgradable to 0.19.x
 
 ### Installation on linux with environment file
 

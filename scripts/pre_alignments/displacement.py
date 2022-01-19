@@ -5,6 +5,7 @@ import glob
 from tifffile import imread, imsave
 from scipy.ndimage.interpolation import shift
 import csv
+import pickle
 from scipy.signal import medfilt
 from scipy.ndimage.filters import gaussian_filter1d
 
@@ -29,8 +30,10 @@ def displace(target_folder, im_filepath, displacement, subpx_displacement=False,
         pad_im[pad_zeros: -pad_zeros, pad_zeros: -pad_zeros] = im
         im = pad_im
 
+    print(f'displacement = {displacement}')
+
     # Shift the image
-    if subpx_displacement:
+    if not subpx_displacement:
         im = shift(im, (np.round(displacement[1]), np.round(displacement[0])))
     else:
         im = shift(im, (displacement[1], displacement[0]))
@@ -68,28 +71,45 @@ def smooth_displace(
     :return:
     """
 
+    def _displacements_from_fiji(disp_fp):
+
+        # FIXME This currently assumes Fiji's 1-based slice numbering
+        displacements = dict()
+        with open(disp_fp) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            line_count = 0
+            for row in csv_reader:
+                if line_count == 0:
+                    pass
+                else:
+                    displacements[int(row[0]) - 1] = (float(row[1]), float(row[2]))
+                line_count += 1
+        assert min(displacements.keys()) >= 0, "Slice indices are assumed in Fiji's 1-based slice numbering!"
+
+        # Here we have to make sure that the reference slice is added to the displacements
+        disps = np.array(
+            [displacements[x] if x in displacements.keys() else (0., 0.) for x in range(len(displacements) + 1)])
+        if verbose >= 2:
+            plt.plot(disps)
+        return disps
+
+    def _displacements_from_pkl(disp_fp):
+        with open(disp_fp, mode='rb') as f:
+            disps = -np.array(pickle.load(f))
+        # disps = np.concatenate([[[0, 0]], disps], axis=0)
+        return disps
+
     print('Computing {} with n_workers={}'.format(displace, n_workers))
 
     im_list = np.array(sorted(glob.glob(os.path.join(source_folder, pattern))))[source_range]
 
     # Load the displacements
-    # FIXME This currently assumes Fiji's 1-based slice numbering
-    displacements = dict()
-    with open(displacements_file) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-        for row in csv_reader:
-            if line_count == 0:
-                pass
-            else:
-                displacements[int(row[0]) - 1] = (float(row[1]), float(row[2]))
-            line_count += 1
-    assert min(displacements.keys()) >= 0, "Slice indices are assumed in Fiji's 1-based slice numbering!"
-
-    # Here we have to make sure that the reference slice is added to the displacements
-    disps_array = np.array([displacements[x] if x in displacements.keys() else (0., 0.) for x in range(len(displacements) + 1)])
-    if verbose >= 2:
-        plt.plot(disps_array)
+    if os.path.splitext(displacements_file)[1] == '.csv':
+        disps_array = _displacements_from_fiji(displacements_file)
+    elif os.path.splitext(displacements_file)[1] == '.pkl':
+        disps_array = _displacements_from_pkl(displacements_file)
+    else:
+        raise ValueError(f'Invalid filetype: {os.path.splitext(displacements_file)[1]}')
 
     # Process the displacements
     disps_y = disps_array[:, 1]

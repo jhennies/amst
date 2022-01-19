@@ -8,7 +8,7 @@ from tifffile import imread, imsave
 from matplotlib import pyplot as plt
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
-from xcorr import _displace_slice
+from .xcorr import _displace_slice
 
 
 def _tm(image, template_im, thresh=0, sigma=1.):
@@ -105,11 +105,4 @@ def offsets_with_tm(
 
 if __name__ == '__main__':
 
-    source = '/data/tmp/alignment_for_wioleta/subset_1001'
-    target = '/data/tmp/alignment_for_wioleta/xcorr_align_2'
-
-    # z_range = np.s_[320:2100]
-    z_range = np.s_[800:900]
-    # z_range = np.s_[:]
-
-    offsets_with_xcorr(source, target, z_range=z_range, xy_range=np.s_[2780:3392, 2370:4290], n_workers=12)
+    pass
