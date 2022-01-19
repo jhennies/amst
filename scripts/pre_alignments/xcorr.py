@@ -131,7 +131,7 @@ def offsets_with_xcorr(
                 tpe.submit(_wrap_xcorr, im_idx, im_list, xy_range, threshold, sigma, mask_range)
                 for im_idx in range(1, len(im_list))
             ]
-        offsets = [task.result() for task in tasks]
+            offsets = [task.result() for task in tasks]
 
     if target_folder is not None or return_sequential:
 
@@ -177,7 +177,7 @@ def offsets_with_xcorr(
                     for im_idx, im_filepath in enumerate(im_list)
                     if not os.path.exists(os.path.join(target_folder, os.path.split(im_filepath)[1]))
                 ]
-            [task.result() for task in tasks]
+                [task.result() for task in tasks]
 
     if return_sequential:
         return seq_offsets

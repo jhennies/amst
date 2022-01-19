@@ -30,10 +30,19 @@ def pre_align(
         template=None,
         tm_threshold=0,
         tm_sigma=0,
+        tm_add_offset=None,
         n_workers=os.cpu_count(),
         rerun=False,
         verbose=False
 ):
+    """
+
+    :param tm_add_offset: [x, y]
+
+    TODO:
+     - Subpixel displacement for TM
+     - Reduce search area for TM
+    """
 
     from pre_alignments.xcorr import offsets_with_xcorr
     from pre_alignments.tm import offsets_with_tm
@@ -81,16 +90,16 @@ def pre_align(
         offsets_tm_fp = os.path.join(cache_folder, 'offsets_tm.pkl')
         if rerun or not os.path.exists(offsets_tm_fp):
 
-            # TODO: this function
             offsets_tm = offsets_with_tm(
                 source_folder,
                 template,
-                target_folder=target_folder,
-                xy_range=None,
+                target_folder=os.path.join(cache_folder, 'tm_applied') if verbose else None,
+                xy_range=np.s_[:],
                 z_range=z_range,
                 subpixel_displacements=True,
                 threshold=tm_threshold,
                 sigma=tm_sigma,
+                add_offset=tm_add_offset,
                 compression=9,
                 n_workers=n_workers,
                 verbose=verbose
@@ -132,6 +141,7 @@ if __name__ == '__main__':
         template=template_fp,
         tm_threshold=[190, 255],
         tm_sigma=0,
+        tm_add_offset=[4000, 200],
         n_workers=os.cpu_count(),
         rerun=False,
         verbose=True
