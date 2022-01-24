@@ -8,7 +8,7 @@ from tifffile import imread, imsave
 from matplotlib import pyplot as plt
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
-from .xcorr import _displace_slice
+from .displacement import displace_slices
 
 
 def _tm(image, template_im, thresh=0, sigma=1.):
@@ -55,7 +55,7 @@ def offsets_with_tm(
         target_folder=None,
         xy_range=np.s_[:],
         z_range=np.s_[:],
-        subpixel_displacements=False,
+        subpixel_displacement=False,
         threshold=0,
         sigma=1.,
         add_offset=None,
@@ -83,37 +83,22 @@ def offsets_with_tm(
             offsets = [task.result() for task in tasks]
 
     if add_offset is not None:
-        print(offsets)
-        print(f'Adapting offsets with {add_offset}')
         offsets = [off - np.array(add_offset) for off in offsets]
-        print(offsets)
+
+    offsets = -np.array(offsets)
 
     if target_folder is not None:
 
         print('Displacing and saving slices ...')
 
-        if n_workers == 1:
-            for im_idx, im_filepath in enumerate(im_list):
-                result_filepath = os.path.join(target_folder, os.path.split(im_filepath)[1])
-                if not os.path.exists(result_filepath):
-                    _displace_slice(im_filepath,
-                                    offsets[im_idx],
-                                    result_filepath=result_filepath,
-                                    subpx_displacement=subpixel_displacements,
-                                    compression=compression)
-        else:
-            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
-                tasks = [
-                    tpe.submit(_displace_slice,
-                               im_filepath,
-                               offsets[im_idx],
-                               os.path.join(target_folder, os.path.split(im_filepath)[1]),
-                               subpixel_displacements,
-                               compression)
-                    for im_idx, im_filepath in enumerate(im_list)
-                    if not os.path.exists(os.path.join(target_folder, os.path.split(im_filepath)[1]))
-                ]
-                [task.result() for task in tasks]
+        displace_slices(
+            im_list, target_folder, offsets,
+            subpx_displacement=subpixel_displacement,
+            compression=compression,
+            pad_zeros=None,
+            parallel_method='multi_process',
+            n_workers=n_workers
+        )
 
     return offsets
 

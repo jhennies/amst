@@ -11,6 +11,7 @@ from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor
 from scipy.ndimage.interpolation import shift
 from scipy.ndimage.filters import gaussian_filter1d
+from .displacement import displace_slices, subtract_run_avg
 
 
 def _xcorr(image, offset_image, thresh=0, sigma=1., mask_range=None):
@@ -32,20 +33,6 @@ def _xcorr(image, offset_image, thresh=0, sigma=1., mask_range=None):
     offset_image = filters.sobel(offset_image)
     shift, error, diffphase = register_translation(image, offset_image, 10)
     return shift[1], shift[0]
-
-
-def _displace_slice(image_filepath, offset, result_filepath=None, subpx_displacement=False, compression=0):
-    print(f'Offset = {offset} for {os.path.split(image_filepath)[1]}')
-    image = imread(image_filepath)
-    if subpx_displacement:
-        image = shift(image, [-offset[1], -offset[0]])
-    else:
-        image = shift(image, -np.round([offset[1], offset[0]]))
-
-    if result_filepath is not None:
-        imsave(result_filepath, image, compress=compression)
-
-    return image
 
 
 def _wrap_xcorr(im_idx, im_list, xy_range, thresh=0, sigma=1., mask_range=None):
@@ -76,30 +63,12 @@ def _sequentialize_offsets(offsets):
     return seq_offsets
 
 
-def _subtract_running_average(offsets, sigma=10.):
-
-    if type(sigma) != list:
-        sigma = [sigma, sigma]
-
-    offsets = np.array(offsets)
-    offsets_x = offsets[:, 0]
-    offsets_y = offsets[:, 1]
-    if sigma[0] > 0:
-        offsets_x = gaussian_filter1d(offsets_x, sigma[0])
-    if sigma[1] > 0:
-        offsets_y = gaussian_filter1d(offsets_y, sigma[1])
-
-    running_average = np.concatenate([offsets_x[:, None], offsets_y[:, None]], axis=1)
-
-    return offsets - running_average
-
-
 def offsets_with_xcorr(
         source_folder, target_folder=None,
         xy_range=np.s_[:],
         z_range=np.s_[:],
         subtract_running_average=0,
-        subpixel_displacements=False,
+        subpixel_displacement=False,
         threshold=0,
         mask_range=None,
         sigma=1.,
@@ -133,6 +102,8 @@ def offsets_with_xcorr(
             ]
             offsets = [task.result() for task in tasks]
 
+    offsets = -np.array(offsets)
+
     if target_folder is not None or return_sequential:
 
         print('Sequentializing offsets ...')
@@ -145,44 +116,29 @@ def offsets_with_xcorr(
 
         if subtract_running_average:
             print('Subtracting running average ...')
-            seq_offsets = _subtract_running_average(seq_offsets, subtract_running_average)
+            seq_offsets = subtract_run_avg(seq_offsets, subtract_running_average)
 
             if verbose:
                 plt.figure()
                 plt.plot(seq_offsets)
                 plt.show()
 
-    if target_folder is not None:
+        if target_folder is not None:
 
-        print('Displacing and saving slices ...')
+            print('Displacing and saving slices ...')
 
-        if n_workers == 1:
-            for im_idx, im_filepath in enumerate(im_list):
-                result_filepath = os.path.join(target_folder, os.path.split(im_filepath)[1])
-                if not os.path.exists(result_filepath):
-                    _displace_slice(im_filepath,
-                                    seq_offsets[im_idx],
-                                    result_filepath=result_filepath,
-                                    subpx_displacement=subpixel_displacements,
-                                    compression=compression)
-        else:
-            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
-                tasks = [
-                    tpe.submit(_displace_slice,
-                               im_filepath,
-                               seq_offsets[im_idx],
-                               os.path.join(target_folder, os.path.split(im_filepath)[1]),
-                               subpixel_displacements,
-                               compression)
-                    for im_idx, im_filepath in enumerate(im_list)
-                    if not os.path.exists(os.path.join(target_folder, os.path.split(im_filepath)[1]))
-                ]
-                [task.result() for task in tasks]
+            displace_slices(
+                im_list, target_folder, seq_offsets,
+                subpx_displacement=subpixel_displacement,
+                compression=compression,
+                pad_zeros=None,
+                parallel_method='multi_process',
+                n_workers=n_workers
+            )
 
-    if return_sequential:
-        return seq_offsets
-    else:
-        return offsets
+        if return_sequential:
+            return seq_offsets
+    return offsets
 
 
 if __name__ == '__main__':

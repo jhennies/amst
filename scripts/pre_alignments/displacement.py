@@ -12,7 +12,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from matplotlib import pyplot as plt
 
 
-def displace(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0, pad_zeros=None):
+def displace_slice(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0, pad_zeros=None):
 
     filename = os.path.split(im_filepath)[1]
     if os.path.isfile(os.path.join(target_folder, filename)):
@@ -40,6 +40,83 @@ def displace(target_folder, im_filepath, displacement, subpx_displacement=False,
 
     # Write result
     imsave(os.path.join(target_folder, filename), im.astype(im.dtype), compress=compression)
+
+
+def displace_slices(
+        im_list,
+        target_folder,
+        offsets,
+        subpx_displacement=False,
+        compression=0,
+        pad_zeros=None,
+        parallel_method='multi_process',
+        n_workers=os.cpu_count()
+):
+    if n_workers == 1:
+
+        print('Running with one worker...')
+        for idx in range(len(im_list)):
+            displace_slice(
+                target_folder, im_list[idx], offsets[idx], subpx_displacement=subpx_displacement,
+                compression=compression, pad_zeros=pad_zeros
+            )
+
+    else:
+
+        if parallel_method == 'multi_process':
+            from multiprocessing import Pool
+            with Pool(processes=n_workers) as p:
+
+                tasks = [
+                    p.apply_async(
+                        displace_slice, (
+                            target_folder, im_list[idx], offsets[idx], subpx_displacement, compression, pad_zeros
+                        )
+                    )
+                    for idx in range(len(im_list))
+                ]
+
+                [task.get() for task in tasks]
+
+        elif parallel_method == 'multi_thread':
+            from concurrent.futures import ThreadPoolExecutor as TPool
+            with TPool(max_workers=n_workers) as p:
+
+                tasks = [
+                    p.submit(
+                        displace_slice,
+                        target_folder, im_list[idx], offsets[idx]
+                    )
+                    for idx in range(len(im_list))
+                ]
+
+                [task.result() for task in tasks]
+
+        else:
+            print("Only 'multi_process' and 'multi_thread' are implemented.")
+            raise NotImplementedError
+
+
+def smooth_offsets(offsets, median_radius=0, gaussian_sigma=0., suppress_x=False):
+
+    disps_y = offsets[:, 1]
+    if median_radius > 0:
+        disps_y = medfilt(disps_y, median_radius * 2 + 1)
+    if gaussian_sigma > 0:
+        disps_y = gaussian_filter1d(disps_y, gaussian_sigma)
+
+    if not suppress_x:
+
+        disps_x = offsets[:, 0]
+        if median_radius > 0:
+            disps_x = medfilt(disps_x, median_radius * 2 + 1)
+        if gaussian_sigma > 0:
+            disps_x = gaussian_filter1d(disps_x, gaussian_sigma)
+
+    else:
+        disps_x = np.zeros(disps_y.shape, dtype=disps_y.dtype)
+
+    return np.concatenate([disps_x[:, None], disps_y[:, None]], axis=1)
 
 
 def smooth_displace(
@@ -99,8 +176,6 @@ def smooth_displace(
         # disps = np.concatenate([[[0, 0]], disps], axis=0)
         return disps
 
-    print('Computing {} with n_workers={}'.format(displace, n_workers))
-
     im_list = np.array(sorted(glob.glob(os.path.join(source_folder, pattern))))[source_range]
 
     # Load the displacements
@@ -112,71 +187,41 @@ def smooth_displace(
         raise ValueError(f'Invalid filetype: {os.path.splitext(displacements_file)[1]}')
 
     # Process the displacements
-    disps_y = disps_array[:, 1]
-    if median_radius > 0:
-        disps_y = medfilt(disps_y, median_radius * 2 + 1)
-    if gaussian_sigma > 0:
-        disps_y = gaussian_filter1d(disps_y, gaussian_sigma)
+    disps_median = smooth_offsets(
+        disps_array,
+        median_radius=median_radius, gaussian_sigma=gaussian_sigma, suppress_x=suppress_x
+    )
 
-    if not suppress_x:
-
-        disps_x = disps_array[:, 0]
-        if median_radius > 0:
-            disps_x = medfilt(disps_x, median_radius * 2 + 1)
-        if gaussian_sigma > 0:
-            disps_x = gaussian_filter1d(disps_x, gaussian_sigma)
-
-    else:
-        disps_x = np.zeros(disps_y.shape, dtype=disps_y.dtype)
-
-    disps_median = np.concatenate([disps_x[:, None], disps_y[:, None]], axis=1)
     if verbose >= 2:
         plt.figure()
         plt.plot(disps_median)
 
     displacements = disps_median
 
-    if n_workers == 1:
+    displace_slices(
+        im_list, target_folder, displacements,
+        subpx_displacement=subpx_displacement,
+        compression=compression,
+        pad_zeros=pad_zeros,
+        parallel_method=parallel_method,
+        n_workers=n_workers
+    )
 
-        print('Running with one worker...')
-        for idx in range(len(im_list)):
-            displace(
-                target_folder, im_list[idx], displacements[idx], subpx_displacement=subpx_displacement,
-                compression=compression, pad_zeros=pad_zeros
-            )
 
-    else:
+def subtract_run_avg(offsets, sigma=10.):
 
-        if parallel_method == 'multi_process':
-            from multiprocessing import Pool
-            with Pool(processes=n_workers) as p:
+    if type(sigma) != list:
+        sigma = [sigma, sigma]
 
-                tasks = [
-                    p.apply_async(
-                        displace, (
-                            target_folder, im_list[idx], displacements[idx], subpx_displacement, compression, pad_zeros
-                        )
-                    )
-                    for idx in range(len(im_list))
-                ]
+    offsets = np.array(offsets)
+    offsets_x = offsets[:, 0]
+    offsets_y = offsets[:, 1]
+    if sigma[0] > 0:
+        offsets_x = gaussian_filter1d(offsets_x, sigma[0])
+    if sigma[1] > 0:
+        offsets_y = gaussian_filter1d(offsets_y, sigma[1])
 
-                [task.get() for task in tasks]
+    running_average = np.concatenate([offsets_x[:, None], offsets_y[:, None]], axis=1)
 
-        elif parallel_method == 'multi_thread':
-            from concurrent.futures import ThreadPoolExecutor as TPool
-            with TPool(max_workers=n_workers) as p:
-
-                tasks = [
-                    p.submit(
-                        displace,
-                        target_folder, im_list[idx], displacements[idx]
-                    )
-                    for idx in range(len(im_list))
-                ]
-
-                [task.result() for task in tasks]
-
-        else:
-            print("Only 'multi_process' and 'multi_thread' are implemented.")
-            raise NotImplementedError
+    return offsets - running_average
 
