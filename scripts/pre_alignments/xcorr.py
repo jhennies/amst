@@ -14,7 +14,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 from .displacement import displace_slices, subtract_run_avg
 
 
-def _xcorr(image, offset_image, thresh=0, sigma=1., mask_range=None):
+def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None):
     if mask_range is not None:
         image[image < mask_range[0]] = 0
         image[image > mask_range[1]] = 0
@@ -35,7 +35,7 @@ def _xcorr(image, offset_image, thresh=0, sigma=1., mask_range=None):
     return shift[1], shift[0]
 
 
-def _wrap_xcorr(im_idx, im_list, xy_range, thresh=0, sigma=1., mask_range=None):
+def _wrap_xcorr(im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., mask_range=None):
     print('{} / {}'.format(im_idx + 1, len(im_list)))
 
     im_filepath = im_list[im_idx]
@@ -69,7 +69,7 @@ def offsets_with_xcorr(
         z_range=np.s_[:],
         subtract_running_average=0,
         subpixel_displacement=False,
-        threshold=0,
+        threshold=(0, 0),
         mask_range=None,
         sigma=1.,
         compression=0,

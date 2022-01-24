@@ -77,7 +77,7 @@ def _init_sift(im_filepath, devicetype='GPU'):
 
 def _wrap_sift(
         im_list, xy_range,
-        thresh=0, sigma=1., mask_range=None, devicetype='GPU',
+        thresh=(0, 0), sigma=1., mask_range=None, devicetype='GPU',
         n_workers=os.cpu_count(),
         n_gpus=1,
         verbose=False
@@ -143,7 +143,7 @@ def offsets_with_sift(
         z_range=np.s_[:],
         subtract_running_average=0,
         subpixel_displacement=False,
-        threshold=0,
+        threshold=(0, 0),
         mask_range=None,
         sigma=1.,
         compression=0,

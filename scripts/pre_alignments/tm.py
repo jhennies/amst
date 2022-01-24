@@ -11,13 +11,11 @@ from concurrent.futures import ThreadPoolExecutor
 from .displacement import displace_slices
 
 
-def _tm(image, template_im, thresh=0, sigma=1.):
+def _tm(image, template_im, thresh=(0, 0), sigma=1.):
 
     # print(f'template_im.shape = {template_im.shape}')
     # print(f'image.shape = {image.shape}')
 
-    if type(thresh) != list:
-        thresh = [thresh, thresh]
     if thresh[0] > 0:
         image[image < thresh[0]] = thresh[0]
         template_im[template_im < thresh[0]] = thresh[0]
@@ -38,7 +36,7 @@ def _tm(image, template_im, thresh=0, sigma=1.):
     return x, y
 
 
-def _wrap_tm(im_idx, im_list, im_ref, xy_range, thresh=0, sigma=1.):
+def _wrap_tm(im_idx, im_list, im_ref, xy_range, thresh=(0, 0), sigma=1.):
     print('{} / {}'.format(im_idx + 1, len(im_list)))
 
     im_filepath = im_list[im_idx]
@@ -56,7 +54,7 @@ def offsets_with_tm(
         xy_range=np.s_[:],
         z_range=np.s_[:],
         subpixel_displacement=False,
-        threshold=0,
+        threshold=(0, 0),
         sigma=1.,
         add_offset=None,
         compression=0,

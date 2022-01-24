@@ -1,35 +1,17 @@
 
-"""
-Pipeline for pre-alignment implementing the following steps:
-
- 1. Alignment for adjacent slice correspondence by either SIFT or cross-correlation (XCORR)
- 2. Alignment for long-distance correspondence by template matching (TM)
-
-The same workflow can be performed using FIJI by following these steps:
- 1. Align the dataset with "Linear stack alignment with SIFT" plugin
- 2. Run this plugin: https://sites.google.com/site/qingzongtseng/template-matching-ij-plugin
-    Input is the result of step 1
-    Save only the displacement file
-    Here, a cropped region of the data can be used to speed up the process and reduce memory usage
- 3. Use smooth_displace.py to apply the TM displacements with the required smoothing
-"""
-
 import os
-import numpy as np
-import pickle
-import glob
 
 
 def pre_align(
         source_folder,
         target_folder,
-        xy_range=np.s_[:],
-        z_range=np.s_[:],
-        local_threshold=0,
+        xy_range=None,
+        z_range=None,
+        local_threshold=(0, 0),
         local_mask_range=None,
         local_sigma=1.,
         template=None,
-        tm_threshold=0,
+        tm_threshold=(0, 0),
         tm_sigma=0,
         tm_add_offset=None,
         tm_smooth_median=8,
@@ -42,161 +24,142 @@ def pre_align(
         n_workers=os.cpu_count(),
         verbose=False
 ):
-    """
 
-    :param tm_add_offset: [x, y]
-    :param local_align_method: "sift" or "xcorr"
-    :param sift_devicetype: "GPU" or "CPU"
-    :param n_gpus: number of available GPUs (This is probably not working for multiple GPUs yet)
-    :param n_workers: number of CPUs
+    import numpy as np
+    from pre_alignments.pre_align import pre_align_workflow
 
-    TODO:
-     - Subpixel displacement for TM
-     - Reduce search area for TM
-     - Auto detection for add_offset (from reference slice)
-    """
+    # xy_range = [X, Y, W, H]
+    xy_range = np.s_[:] if xy_range is None else np.s_[
+        xy_range[1]: xy_range[1] + xy_range[3],
+        xy_range[0]: xy_range[0] + xy_range[2],
+    ]
+    # z_range = [Z, D]
+    z_range = np.s_[:] if z_range is None else np.s_[
+        z_range[0]: z_range[0] + z_range[1]
+    ]
 
-    from pre_alignments.tm import offsets_with_tm
-    from pre_alignments.displacement import smooth_offsets, displace_slices
-
-    def _local_alignment(method):
-        if method == 'xcorr':
-            from pre_alignments.xcorr import offsets_with_xcorr
-            return offsets_with_xcorr(
-                source_folder,
-                target_folder=os.path.join(cache_folder, 'xcorr_applied') if verbose else None,
-                xy_range=xy_range,
-                z_range=z_range,
-                subpixel_displacement=True,  # Used in verbose mode to displace the slices
-                subtract_running_average=0,  # Has to be switched off
-                threshold=local_threshold,  # Defines the relevant grey value range (can be tuple to define upper and lower bound)
-                mask_range=local_mask_range,  # Similar to threshold, but puts everything above the upper bound to zero
-                sigma=local_sigma,  # Gaussian smoothing before xcorr computation
-                compression=9,  # Used in verbose mode to displace the slices
-                return_sequential=True,
-                n_workers=n_workers,
-                verbose=verbose
-            )
-        elif method == 'sift':
-            from pre_alignments.sift import offsets_with_sift
-            return offsets_with_sift(
-                source_folder,
-                target_folder=os.path.join(cache_folder, 'sift_applied') if verbose else None,
-                xy_range=xy_range,
-                z_range=z_range,
-                subtract_running_average=0,
-                subpixel_displacement=True,
-                threshold=local_threshold,
-                mask_range=local_mask_range,
-                sigma=local_sigma,
-                compression=9,
-                return_sequential=True,
-                devicetype=sift_devicetype,
-                n_workers=n_workers,
-                n_gpus=n_gpus,
-                verbose=verbose
-            )
-        else:
-            raise ValueError(f'Invalid method: {method}')
-
-    if not os.path.exists(target_folder):
-        os.mkdir(target_folder)
-    cache_folder = os.path.join(target_folder, 'cache')
-    if not os.path.exists(cache_folder):
-        os.mkdir(cache_folder)
-
-    # Alignment step for local correspondences (can be SIFT or XCORR)
-    offsets_local_fp = os.path.join(cache_folder, f'offsets_{local_align_method}.pkl')
-    if rerun or not os.path.exists(offsets_local_fp):
-        offsets_local = _local_alignment(local_align_method)
-        with open(offsets_local_fp, mode='wb') as f:
-            pickle.dump(offsets_local, f)
-    else:
-        with open(offsets_local_fp, mode='rb') as f:
-            offsets_local = pickle.load(f)
-
-    if verbose:
-        print(f'offsets_local = {offsets_local}')
-
-    # Template matching alignment
-    if template is None:
-        print(f'Skipping template matching!')
-        offsets = offsets_local
-
-    else:
-
-        offsets_tm_fp = os.path.join(cache_folder, 'offsets_tm.pkl')
-        if rerun or not os.path.exists(offsets_tm_fp):
-
-            offsets_tm = offsets_with_tm(
-                source_folder,
-                template,
-                target_folder=os.path.join(cache_folder, 'tm_applied') if verbose else None,
-                xy_range=np.s_[:],
-                z_range=z_range,
-                subpixel_displacement=True,
-                threshold=tm_threshold,
-                sigma=tm_sigma,
-                add_offset=tm_add_offset,
-                compression=9,
-                n_workers=n_workers,
-                verbose=verbose
-            )
-
-            with open(offsets_tm_fp, mode='wb') as f:
-                pickle.dump(offsets_tm, f)
-        else:
-            with open(offsets_tm_fp, mode='rb') as f:
-                offsets_tm = pickle.load(f)
-
-        # The final offsets according to the formula OFFSETS = LOCAL + smoothed(TM - LOCAL)
-        offsets = offsets_local + smooth_offsets(
-            offsets_tm - offsets_local,
-            median_radius=tm_smooth_median,
-            gaussian_sigma=tm_smooth_sigma,
-            suppress_x=tm_suppress_x
-        )
-
-    # Apply final offsets
-    im_list = sorted(glob.glob(os.path.join(source_folder, '*.tif')))[z_range]
-    result_folder = os.path.join(target_folder, 'pre_align')
-    if not os.path.exists(result_folder):
-        os.mkdir(result_folder)
-    displace_slices(
-        im_list, result_folder, offsets,
-        subpx_displacement=True,
-        compression=9,
-        pad_zeros=None,
-        parallel_method='multi_process',
-        n_workers=n_workers
+    pre_align_workflow(
+        source_folder,
+        target_folder,
+        xy_range=xy_range,
+        z_range=z_range,
+        local_threshold=local_threshold,
+        local_mask_range=local_mask_range,
+        local_sigma=local_sigma,
+        template=template,
+        tm_threshold=tm_threshold,
+        tm_sigma=tm_sigma,
+        tm_add_offset=tm_add_offset,
+        tm_smooth_median=tm_smooth_median,
+        tm_smooth_sigma=tm_smooth_sigma,
+        tm_suppress_x=tm_suppress_x,
+        rerun=rerun,
+        local_align_method=local_align_method,
+        sift_devicetype=sift_devicetype,
+        n_gpus=n_gpus,
+        n_workers=n_workers,
+        verbose=verbose
     )
-
-    return offsets
 
 
 if __name__ == '__main__':
 
-    source_folder = '/media/julian/Data/datasets/20140801_hela-wt_xy5z8nm_as/140801_HPF_Gal_1_8bit/'
-    target_folder = '/media/julian/Data/projects/misc/amst_devel/test_pre_align_sift2/'
-    template_fp = '/media/julian/Data/projects/misc/amst_devel/test_pre_align/template.tif'
+    # ----------------------------------------------------
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Pre-alignment workflow',
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument('source_folder', type=str,
+                        help='Source folder')
+    parser.add_argument('target_folder', type=str,
+                        help='Where to save the results')
+    parser.add_argument('--xy_range', type=int, nargs=4, default=None,
+                        metavar=('X', 'Y', 'W', 'H'),
+                        help='Crop xy-range for computation: (x, y, width, height)')
+    parser.add_argument('--z_range', type=int, nargs=2, default=None,
+                        metavar=('Z', 'D'),
+                        help='Only use certain z-range: (z, depth)')
+    parser.add_argument('--local_threshold', type=float, nargs=2, default=[0, 0],
+                        metavar=('lower', 'upper'),
+                        help='Clip the image data below and above a certain threshold')
+    parser.add_argument('--local_mask_range', type=float, nargs=2, default=None,
+                        metavar=('lower', 'upper'),
+                        help='Similar to threshold, except values above the upper threshold are set to zero')
+    parser.add_argument('--local_sigma', type=float, default=1.,
+                        help='Smooths the data before local alignment')
+    parser.add_argument('--template', type=str, default=None,
+                        help='Location of template tiff image. Enables template matching step if set')
+    parser.add_argument('--tm_threshold', type=float, nargs=2, default=[0, 0],
+                        metavar=('lower', 'upper'),
+                        help='Lower and upper thresholds applied before template matching')
+    parser.add_argument('--tm_sigma', type=float, default=0.,
+                        help='Smooths the data before template matching alignment')
+    parser.add_argument('--tm_add_offset', type=int, nargs=2, default=None,
+                        metavar=('X', 'Y'),
+                        help='Add an offset to the final alignment')
+    parser.add_argument('--tm_smooth_median', type=int, default=8,
+                        help='Median smoothing for the offsets when combining local and global alignments')
+    parser.add_argument('--tm_smooth_sigma', type=float, default=8.,
+                        help='Gaussian smoothing for the offsets when combining local and global alignments')
+    parser.add_argument('--tm_suppress_x', action='store_true',
+                        help='Suppresses x-displacements in the TM step')
+    parser.add_argument('--rerun', action='store_true',
+                        help='Triggers re-running of already existing results')
+    parser.add_argument('--local_align_method', type=str, default='sift',
+                        help='Method for local alignment: "sift" or "xcorr"')
+    parser.add_argument('--sift_devicetype', type=str, default='GPU',
+                        help='On which device to run the SIFT alignment: "GPU" or "CPU"')
+    parser.add_argument('--n_gpus', type=int, default=1,
+                        help='Number of available GPUs')
+    parser.add_argument('--n_workers', type=int, default=os.cpu_count(),
+                        help='Maximum number of CPU cores to use')
+    parser.add_argument('-v', '--verbose', action='store_true')
+
+    args = parser.parse_args()
+    source_folder = args.source_folder
+    target_folder = args.target_folder
+    xy_range = args.xy_range
+    z_range = args.z_range
+    local_threshold = args.local_threshold
+    local_mask_range = args.local_mask_range
+    local_sigma = args.local_sigma
+    template = args.template
+    tm_threshold = args.tm_threshold
+    tm_sigma = args.tm_sigma
+    tm_add_offset = args.tm_add_offset
+    tm_smooth_median = args.tm_smooth_median
+    tm_smooth_sigma = args.tm_smooth_sigma
+    tm_suppress_x = args.tm_suppress_x
+    rerun = args.rerun
+    local_align_method = args.local_align_method
+    sift_devicetype = args.sift_devicetype
+    n_gpus = args.n_gpus
+    n_workers = args.n_workers
+    verbose = args.verbose
+
+    # ----------------------------------------------------
 
     pre_align(
         source_folder,
         target_folder,
-        xy_range=np.s_[:],
-        z_range=np.s_[:],
-        local_threshold=0,
-        local_mask_range=[80, -50],
-        local_sigma=1.6,
-        template=template_fp,
-        tm_threshold=[190, 255],
-        tm_sigma=0,
-        tm_add_offset=[4000, 200],
-        tm_smooth_median=8,
-        tm_smooth_sigma=8,
-        n_workers=os.cpu_count(),
-        local_align_method='sift',
-        sift_devicetype='GPU',
-        rerun=False,
-        verbose=True
+        xy_range=xy_range,
+        z_range=z_range,
+        local_threshold=local_threshold,
+        local_mask_range=local_mask_range,
+        local_sigma=local_sigma,
+        template=template,
+        tm_threshold=tm_threshold,
+        tm_sigma=tm_sigma,
+        tm_add_offset=tm_add_offset,
+        tm_smooth_median=tm_smooth_median,
+        tm_smooth_sigma=tm_smooth_sigma,
+        tm_suppress_x=tm_suppress_x,
+        rerun=rerun,
+        local_align_method=local_align_method,
+        sift_devicetype=sift_devicetype,
+        n_gpus=n_gpus,
+        n_workers=n_workers,
+        verbose=verbose
     )
