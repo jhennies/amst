@@ -112,6 +112,7 @@ def _wrap_sift(
 
     keypoints = None
     sift_ocl = _init_sift(im_list[0], devicetype=devicetype)
+    print("Device used for SIFT calculation: ", sift_ocl.ctx.devices[0].name)
     offsets = []
     for idx, im in enumerate(slice_gen):
         print(f'SIFT on image {idx}: {im_list[idx]}')
