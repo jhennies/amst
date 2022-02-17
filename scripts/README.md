@@ -36,12 +36,27 @@ Explanations:
  - n_workers: Number of CPU cores used for calculation
  - verbose: Level of console output
  
- 
+
+## pre_align.py
+
+A pre-alignment workflow including stack alignment with SIFT or cross correlation as well as template matching
+
+    $ cd /path/to/amst/scripts/
+    $ conda activate amst-env
+    (amst-env)$ python pre_align.py /path/to/source_folder /path/to/target_folder [optional parameters]
+
+### parameters and defaults
+
+Check the help for a detailed description
+
+    $ python pre_align.py -h
+
 ## run_amst.py
 
 Runs the very basic version of AMST. For a more custom setting refer to the example_usage.py script. 
 
     $ cd /path/to/amst/scripts/
+    $ source add_paths.sh
     $ conda activate amst-env
     (amst-env)$ python run_amst.py --raw_folder /path --pre_alignment_folder /path --target_folder /path [optional parameters]
 

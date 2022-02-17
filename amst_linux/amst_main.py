@@ -2,6 +2,8 @@
 import os
 import numpy as np
 import warnings
+import pickle
+import yaml
 
 from glob import glob
 from tifffile import imread, imsave
@@ -12,6 +14,7 @@ from silx.image import sift
 from scipy.ndimage.interpolation import shift
 from skimage.transform import downscale_local_mean, rescale
 import pyelastix
+from .utils import pyelastix_mod
 from skimage.feature import register_translation
 from skimage import filters
 
@@ -505,10 +508,41 @@ def _displace_slice(image, offset, result_filepath=None):
     return image
 
 
+def _transform_with_transformix(
+        moving, name,
+        transform_filepath,
+        verbose=False
+):
+
+    if verbose:
+        print(f'Transformix on {name}')
+
+    result = pyelastix_mod.transform(
+        np.array(moving).astype('float32'),
+        transform_filepath, verbose=verbose
+    )
+
+    # The result is read only when it comes out of pyelastix -- copying and replacing fixes that
+    result = result.copy()
+
+    # Getting back the input datatype
+    if moving.dtype == 'uint8':
+        result[result < 0] = 0
+        result[result > 255] = 255
+    elif moving.dtype == 'uint16':
+        result[result < 0] = 0
+        result[result > 65535] = 65535
+    else:
+        raise NotImplementedError
+
+    return result.astype(moving.dtype)
+
+
 def _register_with_elastix(fixed, moving,
                            transform='AffineTransform',
                            elastix_params=None,
                            name=None,
+                           save_transformations=None,
                            verbose=False
                            ):
     if name is not None and verbose:
@@ -528,9 +562,15 @@ def _register_with_elastix(fixed, moving,
     params.ResultImagePixelType = "float"
 
     # The registration
-    result, _ = pyelastix.register(
+    # result, _ = pyelastix.register(
+    #     np.array(moving).astype('float32'),
+    #     np.array(fixed).astype('float32'), params,
+    #     verbose=0
+    # )
+    result = pyelastix_mod.register(
         np.array(moving).astype('float32'),
         np.array(fixed).astype('float32'), params,
+        save_transformations=save_transformations,
         verbose=0
     )
 
@@ -576,19 +616,57 @@ def amst_align(
         raw_pattern='*.tif',
         pre_pattern='*.tif',
         compression=0,
-        force_alignment=False
+        force_alignment=False,
+        apply_only=False,
+        result_name='amst'
 ):
+
     if not os.path.exists(target_folder):
         os.mkdir(target_folder)
+    results_folder = os.path.join(target_folder, result_name)
+    if not os.path.exists(results_folder):
+        os.mkdir(results_folder)
+    metadata_folder = os.path.join(target_folder, 'metadata')
+    if not os.path.exists(metadata_folder):
+        os.mkdir(metadata_folder)
     if write_intermediates:
         if not os.path.exists(os.path.join(target_folder, 'sift')):
             os.mkdir(os.path.join(target_folder, 'sift'))
         if not os.path.exists(os.path.join(target_folder, 'refs')):
             os.mkdir(os.path.join(target_folder, 'refs'))
 
+    # Dump the parameters
+    if not apply_only:
+        with open(os.path.join(metadata_folder, 'params.yml'), mode='w') as f:
+            yaml.dump(
+                dict(
+                    pre_alignment_folder=pre_alignment_folder,
+                    median_radius=median_radius,
+                    elastix_params=elastix_params,
+                    coarse_alignment=coarse_alignment,
+                    sift_sigma=sift_sigma,
+                    sift_downsample=sift_downsample,
+                    n_workers=n_workers,
+                    n_workers_sift=n_workers_sift,
+                    sift_devicetype=sift_devicetype,
+                    compute_range=compute_range,
+                    verbose=verbose,
+                    write_intermediates=write_intermediates,
+                    raw_pattern=raw_pattern,
+                    pre_pattern=pre_pattern,
+                    compression=compression,
+                    force_alignment=force_alignment
+                ), f
+            )
+    else:
+        print(f'raw_folder = {raw_folder}')
+        print(f'pre_alignemnt_folder = {pre_alignment_folder}')
+        print(f'target_folder = {target_folder}')
+
     # The generator yields batches of data with the the number of slices equalling the specified number of cpu workers
     # The slices in each batch of data are generated in parallel
-    for templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names, final_shapes in pre_processing_generator(
+    # FIXME No template should be needed if apply_only (but implementing this requires quite some remodeling)
+    for batch_id, (templates_med, templates_med_smooth, raws_crop, raws_crop_smooth, names, final_shapes) in enumerate(pre_processing_generator(
             raw_folder,
             pre_alignment_folder,
             median_radius=median_radius,
@@ -596,45 +674,55 @@ def amst_align(
             sift_downsample=sift_downsample,
             n_workers=n_workers,
             compute_range=compute_range,
-            target_folder=target_folder,
+            target_folder=results_folder,
             raw_pattern=raw_pattern,
             pre_pattern=pre_pattern,
             force_alignment=force_alignment,
             verbose=verbose
-    ):
+    )):
         if coarse_alignment is not None:
-            if coarse_alignment == 'SIFT':
-                print('Coarse alignment by translation done with SIFT.')
-                _on_pair_func = _sift_on_pair
-            else:
-                print('Coarse alignment by translation done with cross correlation.')
-                _on_pair_func = _xcorr_on_pair
-            # Run SIFT align with one thread if computation is performed on the GPU, otherwise multi-threading speeds
-            # up the rather slow CPU computation
-            if n_workers_sift > 1:
-                with ThreadPoolExecutor(max_workers=n_workers) as tpe:
-                    tasks = [
-                        tpe.submit(
-                            _on_pair_func, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
-                        )
+            if not apply_only:
+                if coarse_alignment == 'SIFT':
+                    print('Coarse alignment by translation done with SIFT.')
+                    _on_pair_func = _sift_on_pair
+                else:
+                    print('Coarse alignment by translation done with cross correlation.')
+                    _on_pair_func = _xcorr_on_pair
+                # Run SIFT align with one thread if computation is performed on the GPU, otherwise multi-threading speeds
+                # up the rather slow CPU computation
+                if n_workers_sift > 1:
+                    with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+                        tasks = [
+                            tpe.submit(
+                                _on_pair_func, *(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
+                            )
+                            if raws_crop[idx] is not None else None
+                            for idx in range(len(templates_med))
+                        ]
+                        offsets = [task.result()
+                                if task is not None else None
+                                for task in tasks]
+                else:
+                    offsets = [
+                        _on_pair_func(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
                         if raws_crop[idx] is not None else None
                         for idx in range(len(templates_med))
                     ]
-                    offsets = [task.result()
-                            if task is not None else None
-                            for task in tasks]
+                if sift_downsample is not None:
+                    offsets = [np.array(offset) * np.array(sift_downsample)
+                            if offset is not None else None
+                            for offset in offsets]
+                del templates_med_smooth
+                del raws_crop_smooth
+
+                # Save the offsets
+                with open(os.path.join(metadata_folder, 'sift_offsets_{:04d}.pkl'.format(batch_id)), mode='wb') as f:
+                    pickle.dump(offsets, f)
+
             else:
-                offsets = [
-                    _on_pair_func(templates_med_smooth[idx], raws_crop_smooth[idx], sift_devicetype, verbose)
-                    if raws_crop[idx] is not None else None
-                    for idx in range(len(templates_med))
-                ]
-            if sift_downsample is not None:
-                offsets = [np.array(offset) * np.array(sift_downsample)
-                        if offset is not None else None
-                        for offset in offsets]
-            del templates_med_smooth
-            del raws_crop_smooth
+                # Load the offsets
+                with open(os.path.join(metadata_folder, 'sift_offsets_{:04d}.pkl'.format(batch_id)), mode='rb') as f:
+                    offsets = pickle.load(f)
 
             # Shift the batch of data in parallel
             if n_workers > 1:
@@ -696,16 +784,31 @@ def amst_align(
                 for idx in range(len(raws_crop))
                 ]
 
-        # Register with ELASTIX with one thread, as it is parallelized internally
-        raws_crop = [
-            _register_with_elastix(
-                templates_med[idx], raws_crop[idx], name=names[idx],
-                elastix_params=elastix_params, verbose=verbose
-            )
-            if raws_crop[idx] is not None else None
-            for idx in range(len(raws_crop))
-        ]
-        del templates_med
+        if not apply_only:
+            # Register with ELASTIX with one thread, as it is parallelized internally
+            raws_crop = [
+                _register_with_elastix(
+                    templates_med[idx], raws_crop[idx], name=names[idx],
+                    elastix_params=elastix_params,
+                    save_transformations=os.path.join(metadata_folder, f'transform_{names[idx]}.txt'),
+                    verbose=verbose
+                )
+                if raws_crop[idx] is not None else None
+                for idx in range(len(raws_crop))
+            ]
+            del templates_med
+
+        else:
+            # Run transformix
+            raws_crop = [
+                _transform_with_transformix(
+                    raws_crop[idx], name=names[idx],
+                    transform_filepath=os.path.join(metadata_folder, f'transform_{names[idx]}.txt'),
+                    verbose=verbose
+                )
+                if raws_crop[idx] is not None else None
+                for idx in range(len(raws_crop))
+            ]
 
         # Write the results in parallel
         if n_workers > 1:
@@ -713,7 +816,7 @@ def amst_align(
                 tasks = [
                     p.apply_async(
                         _write_result, (
-                            os.path.join(target_folder, names[idx]), raws_crop[idx], compression
+                            os.path.join(results_folder, names[idx]), raws_crop[idx], compression
                         )
                     )
                     if raws_crop[idx] is not None else None
@@ -723,12 +826,30 @@ def amst_align(
                 if task is not None else None
                 for task in tasks]
         else:
-            [_write_result(os.path.join(target_folder, names[idx]), raws_crop[idx], compression, final_shapes[idx])
+            [_write_result(os.path.join(results_folder, names[idx]), raws_crop[idx], compression, final_shapes[idx])
             if raws_crop[idx] is not None else None
             for idx in range(len(raws_crop))
             ]
 
-    
+
+def apply_amst_transformations(
+        raw_folder,
+        target_folder,
+        run_name
+):
+
+    params_filepath = os.path.join(target_folder, 'metadata', 'params.yml')
+    with open(params_filepath, mode='r') as f:
+        kwargs = yaml.load(f, Loader=yaml.Loader)
+
+    amst_align(
+        raw_folder=raw_folder,
+        target_folder=target_folder,
+        **kwargs,
+        apply_only=True,
+        result_name=run_name
+    )
+
 
 if __name__ == '__main__':
 

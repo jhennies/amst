@@ -5,9 +5,6 @@ Also only very basic parameters are exposed, if you intend to run AMST with spec
 example_usage.py script
 """
 
-import sys
-sys.path.append('C:\\Users\\TEAM\\src\\new_amst\\amst')
-
 from amst_linux.amst_main import amst_align, default_amst_params
 import argparse
 

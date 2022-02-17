@@ -68,7 +68,9 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Pre-alignment workflow',
+        description='Pre-alignment workflow \n'
+                    'It performs a local alignment, i.e. for correspondences of adjacent slices by SIFT or cross-'
+                    'correlation, as well as an alignment for large-scale correspondences using template matching.',
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument('source_folder', type=str,
