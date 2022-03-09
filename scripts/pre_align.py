@@ -89,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--local_mask_range', type=float, nargs=2, default=None,
                         metavar=('lower', 'upper'),
                         help='Similar to threshold, except values above the upper threshold are set to zero')
-    parser.add_argument('--local_sigma', type=float, default=1.,
+    parser.add_argument('--local_sigma', type=float, default=1.6,
                         help='Smooths the data before local alignment')
     parser.add_argument('--template', type=str, default=None,
                         help='Location of template tiff image. Enables template matching step if set')

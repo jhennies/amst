@@ -67,10 +67,10 @@ def _sift(image, reference, sift_ocl=None, devicetype=None, return_keypoints=Fal
         return offset[0], offset[1]
 
 
-def _init_sift(im_filepath, devicetype='GPU'):
+def _init_sift(im_filepath, devicetype='GPU', xy_range=np.s_[:]):
 
     # Initialize the SIFT
-    sift_ocl = sift.SiftPlan(template=imread(im_filepath), devicetype=devicetype)
+    sift_ocl = sift.SiftPlan(template=imread(im_filepath)[xy_range], devicetype=devicetype)
 
     return sift_ocl
 
@@ -111,7 +111,7 @@ def _wrap_sift(
     )
 
     keypoints = None
-    sift_ocl = _init_sift(im_list[0], devicetype=devicetype)
+    sift_ocl = _init_sift(im_list[0], devicetype=devicetype, xy_range=xy_range)
     print("Device used for SIFT calculation: ", sift_ocl.ctx.devices[0].name)
     offsets = []
     for idx, im in enumerate(slice_gen):
