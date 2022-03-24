@@ -28,6 +28,7 @@ def pre_align_workflow(
         local_threshold=0,
         local_mask_range=None,
         local_sigma=1.,
+        local_norm_quantiles=(0.1, 0.9),
         template=None,
         tm_threshold=0,
         tm_sigma=0,
@@ -38,6 +39,7 @@ def pre_align_workflow(
         rerun=False,
         local_align_method='sift',
         sift_devicetype='GPU',
+        auto_pad=False,
         n_gpus=1,
         n_workers=os.cpu_count(),
         verbose=False
@@ -97,9 +99,11 @@ def pre_align_workflow(
                 threshold=local_threshold,
                 mask_range=local_mask_range,
                 sigma=local_sigma,
+                norm_quantiles=local_norm_quantiles,
                 compression=9,
                 return_sequential=True,
                 devicetype=sift_devicetype,
+                return_bounds=auto_pad,
                 n_workers=n_workers,
                 n_gpus=n_gpus,
                 verbose=verbose
@@ -122,6 +126,11 @@ def pre_align_workflow(
     else:
         with open(offsets_local_fp, mode='rb') as f:
             offsets_local = pickle.load(f)
+
+    bounds = None
+    if auto_pad:
+        bounds = offsets_local[1]
+        offsets_local = offsets_local[0]
 
     if verbose:
         print(f'offsets_local = {offsets_local}')
@@ -175,6 +184,7 @@ def pre_align_workflow(
         subpx_displacement=True,
         compression=9,
         pad_zeros=None,
+        bounds=bounds,
         parallel_method='multi_process',
         n_workers=n_workers
     )

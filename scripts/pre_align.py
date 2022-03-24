@@ -6,10 +6,12 @@ def pre_align(
         source_folder,
         target_folder,
         xy_range=None,
+        auto_xy_range=False,  # TODO
         z_range=None,
         local_threshold=(0, 0),
         local_mask_range=None,
         local_sigma=1.,
+        local_norm_quantiles=(0.1, 0.9),
         template=None,
         tm_threshold=(0, 0),
         tm_sigma=0,
@@ -20,6 +22,7 @@ def pre_align(
         rerun=False,
         local_align_method='sift',
         sift_devicetype='GPU',
+        auto_pad=False,
         n_gpus=1,
         n_workers=os.cpu_count(),
         verbose=False
@@ -46,6 +49,7 @@ def pre_align(
         local_threshold=local_threshold,
         local_mask_range=local_mask_range,
         local_sigma=local_sigma,
+        local_norm_quantiles=local_norm_quantiles,
         template=template,
         tm_threshold=tm_threshold,
         tm_sigma=tm_sigma,
@@ -56,6 +60,7 @@ def pre_align(
         rerun=rerun,
         local_align_method=local_align_method,
         sift_devicetype=sift_devicetype,
+        auto_pad=auto_pad,
         n_gpus=n_gpus,
         n_workers=n_workers,
         verbose=verbose
@@ -80,6 +85,8 @@ if __name__ == '__main__':
     parser.add_argument('--xy_range', type=int, nargs=4, default=None,
                         metavar=('X', 'Y', 'W', 'H'),
                         help='Crop xy-range for computation: (x, y, width, height)')
+    parser.add_argument('--auto_xy_range', action='store_true',
+                        help='TODO: Automatically determine inner bounds')
     parser.add_argument('--z_range', type=int, nargs=2, default=None,
                         metavar=('Z', 'D'),
                         help='Only use certain z-range: (z, depth)')
@@ -91,6 +98,8 @@ if __name__ == '__main__':
                         help='Similar to threshold, except values above the upper threshold are set to zero')
     parser.add_argument('--local_sigma', type=float, default=1.6,
                         help='Smooths the data before local alignment')
+    parser.add_argument('--local_norm_quantiles', type=float, nargs=2, default=(0.1, 0.9),
+                        help='For SIFT: Histogram quantiles for normalization of the data. Default=(0.1, 0.9)')
     parser.add_argument('--template', type=str, default=None,
                         help='Location of template tiff image. Enables template matching step if set')
     parser.add_argument('--tm_threshold', type=float, nargs=2, default=[0, 0],
@@ -113,6 +122,8 @@ if __name__ == '__main__':
                         help='Method for local alignment: "sift" or "xcorr"')
     parser.add_argument('--sift_devicetype', type=str, default='GPU',
                         help='On which device to run the SIFT alignment: "GPU" or "CPU"')
+    parser.add_argument('--auto_pad', action='store_true',
+                        help='TODO: Automatically adjust canvas to match the final slice positions')
     parser.add_argument('--n_gpus', type=int, default=1,
                         help='Number of available GPUs')
     parser.add_argument('--n_workers', type=int, default=os.cpu_count(),
@@ -127,6 +138,7 @@ if __name__ == '__main__':
     local_threshold = args.local_threshold
     local_mask_range = args.local_mask_range
     local_sigma = args.local_sigma
+    local_norm_quantiles = args.local_norm_quantiles
     template = args.template
     tm_threshold = args.tm_threshold
     tm_sigma = args.tm_sigma
@@ -137,6 +149,7 @@ if __name__ == '__main__':
     rerun = args.rerun
     local_align_method = args.local_align_method
     sift_devicetype = args.sift_devicetype
+    auto_pad = args.auto_pad
     n_gpus = args.n_gpus
     n_workers = args.n_workers
     verbose = args.verbose
@@ -151,6 +164,7 @@ if __name__ == '__main__':
         local_threshold=local_threshold,
         local_mask_range=local_mask_range,
         local_sigma=local_sigma,
+        local_norm_quantiles=local_norm_quantiles,
         template=template,
         tm_threshold=tm_threshold,
         tm_sigma=tm_sigma,
@@ -161,6 +175,7 @@ if __name__ == '__main__':
         rerun=rerun,
         local_align_method=local_align_method,
         sift_devicetype=sift_devicetype,
+        auto_pad=auto_pad,
         n_gpus=n_gpus,
         n_workers=n_workers,
         verbose=verbose

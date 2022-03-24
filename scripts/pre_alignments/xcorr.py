@@ -1,5 +1,6 @@
 
 from skimage.feature import register_translation
+from skimage.registration import phase_cross_correlation
 from vigra.filters import gaussianSmoothing, gaussianGradientMagnitude
 from skimage import filters
 import glob
@@ -12,6 +13,18 @@ from concurrent.futures import ThreadPoolExecutor
 from scipy.ndimage.interpolation import shift
 from scipy.ndimage.filters import gaussian_filter1d
 from .displacement import displace_slices, subtract_run_avg
+
+
+def _norm_8bit(im):
+    im = im.astype('float32')
+    upper = np.quantile(im, 0.8)
+    lower = np.quantile(im, 0.2)
+    im -= lower
+    im /= (upper - lower)
+    im *= 255
+    im[im > 255] = 255
+    im[im < 0] = 0
+    return im.astype('uint8')
 
 
 def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None):
@@ -27,25 +40,42 @@ def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None):
         image[image > thresh[1]] = thresh[1]
         offset_image[offset_image > thresh[1]] = thresh[1]
 
+    # dtype = image.dtype
+
+    image = _norm_8bit(image)
+    offset_image = _norm_8bit(offset_image)
+
+    # image = gaussianSmoothing(image.astype('float32'), sigma).astype(dtype)
+    # offset_image = gaussianSmoothing(offset_image.astype('float32'), sigma).astype(dtype)
     image = gaussianSmoothing(image, sigma)
     offset_image = gaussianSmoothing(offset_image, sigma)
     image = filters.sobel(image)
     offset_image = filters.sobel(offset_image)
-    shift, error, diffphase = register_translation(image, offset_image, 10)
+    # shift, error, diffphase = register_translation(image, offset_image, 10)
+    shift, error, diffphase = phase_cross_correlation(image, offset_image, upsample_factor=10)
     return shift[1], shift[0]
 
 
-def _wrap_xcorr(im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., mask_range=None):
+def _wrap_xcorr(im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., mask_range=None, num_ref_ims=1):
     print('{} / {}'.format(im_idx + 1, len(im_list)))
 
     im_filepath = im_list[im_idx]
-    im_ref_filepath = im_list[im_idx - 1]
+    im = imread(im_filepath)[xy_range]
+    if num_ref_ims == 1:
+        im_ref_filepath = im_list[im_idx - 1]
+        im_ref = imread(im_ref_filepath)[xy_range]
+    else:
+        im_ref = []
+        for idx in range(num_ref_ims):
+            if im_idx - 1 - idx >= 0:
+                im_ref.append(imread(im_list[im_idx - 1 - idx])[xy_range])
+        im_ref = np.mean(im_ref, axis=0)
 
-    print('moving: {}'.format(os.path.split(im_filepath)[1]))
-    print('fixed: {}'.format(os.path.split(im_ref_filepath)[1]))
+    # print('moving: {}'.format(os.path.split(im_filepath)[1]))
+    # print('fixed: {}'.format(os.path.split(im_ref_filepath)[1]))
 
     offset = _xcorr(
-        imread(im_filepath)[xy_range], imread(im_ref_filepath)[xy_range],
+        im, im_ref,
         thresh=thresh, sigma=sigma, mask_range=mask_range
     )
     return offset
@@ -74,6 +104,7 @@ def offsets_with_xcorr(
         sigma=1.,
         compression=0,
         return_sequential=False,
+        local_ref_slices=1,
         n_workers=1,
         verbose=0
 ):
@@ -92,12 +123,12 @@ def offsets_with_xcorr(
         offsets = []
         for im_idx in range(1, len(im_list)):
             offsets.append(_wrap_xcorr(
-                im_idx, im_list, xy_range, thresh=threshold, sigma=sigma, mask_range=mask_range
+                im_idx, im_list, xy_range, thresh=threshold, sigma=sigma, mask_range=mask_range, num_ref_ims=local_ref_slices
             ))
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as tpe:
             tasks = [
-                tpe.submit(_wrap_xcorr, im_idx, im_list, xy_range, threshold, sigma, mask_range)
+                tpe.submit(_wrap_xcorr, im_idx, im_list, xy_range, threshold, sigma, mask_range, local_ref_slices)
                 for im_idx in range(1, len(im_list))
             ]
             offsets = [task.result() for task in tasks]

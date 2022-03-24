@@ -12,7 +12,16 @@ from scipy.ndimage.filters import gaussian_filter1d
 from matplotlib import pyplot as plt
 
 
-def displace_slice(target_folder, im_filepath, displacement, subpx_displacement=False, compression=0, pad_zeros=None):
+def displace_slice(
+        target_folder,
+        im_filepath,
+        displacement,
+        subpx_displacement=False,
+        compression=0,
+        pad_zeros=None,
+        bounds=np.s_[:],
+        target_shape=None
+):
 
     filename = os.path.split(im_filepath)[1]
     if os.path.isfile(os.path.join(target_folder, filename)):
@@ -21,8 +30,17 @@ def displace_slice(target_folder, im_filepath, displacement, subpx_displacement=
 
     print('displacements on {}'.format(filename))
 
+    # displacement = np.array((
+    #         displacement[0] - bounds[1].start,
+    #         displacement[1] - bounds[0].start
+    # ))
+
     # Load image
-    im = imread(im_filepath)
+    im = imread(im_filepath)[bounds]
+    if target_shape is not None:
+        tim = np.zeros(target_shape, im.dtype)
+        tim[:im.shape[0], :im.shape[1]] = im
+        im = tim
 
     # zero-pad image
     if pad_zeros:
@@ -49,16 +67,41 @@ def displace_slices(
         subpx_displacement=False,
         compression=0,
         pad_zeros=None,
+        bounds=None,
         parallel_method='multi_process',
         n_workers=os.cpu_count()
 ):
+
+    offsets = np.array(offsets)
+    shape = None
+
+    if bounds:
+
+        # Prepare the displacements respective all bounds and figure out the target shape
+        offsets_ = []
+        for idx, b in enumerate(bounds):
+            offsets_.append(np.array((offsets[idx][0] + b[1].start, offsets[idx][1] + b[0].start)))
+        offsets = offsets_
+        offsets = offsets - np.min(offsets, axis=0)
+        starts = []
+        stops = []
+        for idx, b in enumerate(bounds):
+            starts.append(np.array((b[0].start, b[1].start)) + offsets[idx][::-1])
+            stops.append(np.array((b[0].stop, b[1].stop)) + offsets[idx][::-1])
+        min_yx = np.floor(np.min(starts, axis=0)).astype(int)
+        max_yx = np.ceil(np.max(stops, axis=0)).astype(int)
+        # Pad a little to each side to make it less squished
+        shape = max_yx - min_yx + 32
+        offsets += 16
+
     if n_workers == 1:
 
         print('Running with one worker...')
         for idx in range(len(im_list)):
             displace_slice(
                 target_folder, im_list[idx], offsets[idx], subpx_displacement=subpx_displacement,
-                compression=compression, pad_zeros=pad_zeros
+                compression=compression, pad_zeros=pad_zeros, bounds=bounds[idx] if bounds is not None else np.s_[:],
+                target_shape=shape
             )
 
     else:
@@ -70,7 +113,8 @@ def displace_slices(
                 tasks = [
                     p.apply_async(
                         displace_slice, (
-                            target_folder, im_list[idx], offsets[idx], subpx_displacement, compression, pad_zeros
+                            target_folder, im_list[idx], offsets[idx], subpx_displacement, compression, pad_zeros,
+                            bounds[idx] if bounds is not None else np.s_[:], shape
                         )
                     )
                     for idx in range(len(im_list))

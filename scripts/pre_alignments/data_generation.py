@@ -5,13 +5,40 @@ from tifffile import imread
 import numpy as np
 
 
-def _retrieve_slice(im_fp, xy_range=np.s_[:], pre_process_func=None, pre_process_kwargs=None):
+def _crop_zero_padding(dat):
+    # argwhere will give you the coordinates of every non-zero point
+    true_points = np.argwhere(dat)
+    # take the smallest points and use them as the top left of your crop
+    top_left = true_points.min(axis=0)
+    # take the largest points and use them as the bottom right of your crop
+    bottom_right = true_points.max(axis=0)
+    # generate bounds
+    bounds = np.s_[top_left[0]:bottom_right[0] + 1,  # plus 1 because slice isn't
+                   top_left[1]:bottom_right[1] + 1]  # inclusive
+    return bounds
 
-    im = imread(im_fp)[xy_range]
+
+def _retrieve_slice(
+        im_fp, xy_range=np.s_[:],
+        pre_process_func=None,
+        pre_process_kwargs=None,
+        return_bounds=False
+):
+
+    bounds = None
+    if return_bounds:
+        im = imread(im_fp)
+        bounds = _crop_zero_padding(im)
+        im = im[xy_range]
+    else:
+        im = imread(im_fp)[xy_range]
     if pre_process_func is not None:
         im = pre_process_func(im, **pre_process_kwargs)
 
-    return im
+    if return_bounds:
+        return im, bounds
+    else:
+        return im
 
 
 def _retrieve_batch(
@@ -20,6 +47,7 @@ def _retrieve_batch(
         pre_process_func=None,
         pre_process_kwargs=None,
         start_id=0,
+        return_bounds=False,
         n_workers=os.cpu_count()
 ):
 
@@ -31,11 +59,15 @@ def _retrieve_batch(
         end_of_list = False
 
     if n_workers == 1:
-        batch = [_retrieve_slice(im_fp, xy_range, pre_process_func, pre_process_kwargs) for im_fp in im_list]
+        batch = [
+            _retrieve_slice(
+                im_fp, xy_range, pre_process_func, pre_process_kwargs, return_bounds=return_bounds
+            )
+            for im_fp in im_list]
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as tpe:
             tasks = [
-                tpe.submit(_retrieve_slice, im_list[idx], xy_range, pre_process_func, pre_process_kwargs)
+                tpe.submit(_retrieve_slice, im_list[idx], xy_range, pre_process_func, pre_process_kwargs, return_bounds)
                 for idx in range(start_id, stop_id)
             ]
             batch = [task.result() for task in tasks]
@@ -49,6 +81,7 @@ def parallel_image_slice_generator(
         pre_process_func=None,
         pre_process_kwargs=None,
         yield_consecutive=False,
+        yield_bounds=False,
         n_workers=os.cpu_count()
 ):
     """
@@ -69,8 +102,11 @@ def parallel_image_slice_generator(
         pre_process_func=pre_process_func,
         pre_process_kwargs=pre_process_kwargs,
         start_id=0,
+        return_bounds=yield_bounds,
         n_workers=n_workers
     )
+    if yield_bounds:
+        batch, bounds = np.array(batch, dtype=object)[:, 0], np.array(batch, dtype=object)[:, 1]
     if yield_consecutive:
         next_id -= 1
         batch_size -= 1
@@ -103,18 +139,27 @@ def parallel_image_slice_generator(
                 n = 0
                 print('Fetching results')
                 batch, batch_size, next_id, end_of_list = res.get()
-                if yield_consecutive:
-                    next_id -= 1
-                    batch_size -= 1
-                print('Joining job')
-                batch_id += 1
+                if len(batch) > 0:
+                    if yield_bounds:
+                        batch, bounds = np.array(batch, dtype=object)[:, 0], np.array(batch, dtype=object)[:, 1]
+                    if yield_consecutive:
+                        next_id -= 1
+                        batch_size -= 1
+                    print('Joining job')
+                    batch_id += 1
 
         else:
 
-            if yield_consecutive:
-                yield batch[n], batch[n + 1]
+            if yield_bounds:
+                if yield_consecutive:
+                    yield batch[n], batch[n + 1], bounds[n]
+                else:
+                    yield batch[n], bounds[n]
             else:
-                yield batch[n]
+                if yield_consecutive:
+                    yield batch[n], batch[n + 1]
+                else:
+                    yield batch[n]
             n += 1
 
 
