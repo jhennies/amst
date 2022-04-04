@@ -12,6 +12,7 @@ def pre_align(
         local_mask_range=None,
         local_sigma=1.,
         local_norm_quantiles=(0.1, 0.9),
+        local_no_sobel=False,
         template=None,
         tm_threshold=(0, 0),
         tm_sigma=0,
@@ -50,6 +51,7 @@ def pre_align(
         local_mask_range=local_mask_range,
         local_sigma=local_sigma,
         local_norm_quantiles=local_norm_quantiles,
+        local_no_sobel=local_no_sobel,
         template=template,
         tm_threshold=tm_threshold,
         tm_sigma=tm_sigma,
@@ -100,6 +102,8 @@ if __name__ == '__main__':
                         help='Smooths the data before local alignment')
     parser.add_argument('--local_norm_quantiles', type=float, nargs=2, default=(0.1, 0.9),
                         help='For SIFT: Histogram quantiles for normalization of the data. Default=(0.1, 0.9)')
+    parser.add_argument('--local_no_sobel', action='store_true',
+                        help='For XCORR: switches boundary detection off')
     parser.add_argument('--template', type=str, default=None,
                         help='Location of template tiff image. Enables template matching step if set')
     parser.add_argument('--tm_threshold', type=float, nargs=2, default=[0, 0],
@@ -139,6 +143,7 @@ if __name__ == '__main__':
     local_mask_range = args.local_mask_range
     local_sigma = args.local_sigma
     local_norm_quantiles = args.local_norm_quantiles
+    local_no_sobel = args.local_no_sobel
     template = args.template
     tm_threshold = args.tm_threshold
     tm_sigma = args.tm_sigma
@@ -165,6 +170,7 @@ if __name__ == '__main__':
         local_mask_range=local_mask_range,
         local_sigma=local_sigma,
         local_norm_quantiles=local_norm_quantiles,
+        local_no_sobel=local_no_sobel,
         template=template,
         tm_threshold=tm_threshold,
         tm_sigma=tm_sigma,

@@ -29,6 +29,7 @@ def pre_align_workflow(
         local_mask_range=None,
         local_sigma=1.,
         local_norm_quantiles=(0.1, 0.9),
+        local_no_sobel=False,
         template=None,
         tm_threshold=0,
         tm_sigma=0,
@@ -82,8 +83,10 @@ def pre_align_workflow(
                 threshold=local_threshold,  # Defines the relevant grey value range (can be tuple to define upper and lower bound)
                 mask_range=local_mask_range,  # Similar to threshold, but puts everything above the upper bound to zero
                 sigma=local_sigma,  # Gaussian smoothing before xcorr computation
+                no_sobel=local_no_sobel,
                 compression=9,  # Used in verbose mode to displace the slices
                 return_sequential=True,
+                return_bounds=auto_pad,
                 n_workers=n_workers,
                 verbose=verbose
             )
@@ -117,20 +120,27 @@ def pre_align_workflow(
     if not os.path.exists(cache_folder):
         os.mkdir(cache_folder)
 
-    # Alignment step for local correspondences (can be SIFT or XCORR)
-    offsets_local_fp = os.path.join(cache_folder, f'offsets_{local_align_method}.pkl')
-    if rerun or not os.path.exists(offsets_local_fp):
-        offsets_local = _local_alignment(local_align_method)
-        with open(offsets_local_fp, mode='wb') as f:
-            pickle.dump(offsets_local, f)
-    else:
-        with open(offsets_local_fp, mode='rb') as f:
-            offsets_local = pickle.load(f)
+    if local_align_method != 'None':
+        # Alignment step for local correspondences (can be SIFT or XCORR)
+        offsets_local_fp = os.path.join(cache_folder, f'offsets_{local_align_method}.pkl')
+        if rerun or not os.path.exists(offsets_local_fp):
+            offsets_local = _local_alignment(local_align_method)
+            with open(offsets_local_fp, mode='wb') as f:
+                pickle.dump(offsets_local, f)
+        else:
+            with open(offsets_local_fp, mode='rb') as f:
+                offsets_local = pickle.load(f)
 
-    bounds = None
-    if auto_pad:
-        bounds = offsets_local[1]
-        offsets_local = offsets_local[0]
+        bounds = None
+        if auto_pad:
+            bounds = offsets_local[1] if type(offsets_local[1]) == list else offsets_local[1].tolist()
+            offsets_local = offsets_local[0]
+
+    else:
+        offsets_local = None
+        bounds = None
+        assert not auto_pad
+        assert template is not None
 
     if verbose:
         print(f'offsets_local = {offsets_local}')
@@ -166,13 +176,16 @@ def pre_align_workflow(
             with open(offsets_tm_fp, mode='rb') as f:
                 offsets_tm = pickle.load(f)
 
-        # The final offsets according to the formula OFFSETS = LOCAL + smoothed(TM - LOCAL)
-        offsets = offsets_local + smooth_offsets(
-            offsets_tm - offsets_local,
-            median_radius=tm_smooth_median,
-            gaussian_sigma=tm_smooth_sigma,
-            suppress_x=tm_suppress_x
-        )
+        if local_align_method != 'None':
+            # The final offsets according to the formula OFFSETS = LOCAL + smoothed(TM - LOCAL)
+            offsets = offsets_local + smooth_offsets(
+                offsets_tm - offsets_local,
+                median_radius=tm_smooth_median,
+                gaussian_sigma=tm_smooth_sigma,
+                suppress_x=tm_suppress_x
+            )
+        else:
+            offsets = offsets_tm
 
     # Apply final offsets
     im_list = sorted(glob.glob(os.path.join(source_folder, '*.tif')))[z_range]

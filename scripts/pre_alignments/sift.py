@@ -159,7 +159,8 @@ def _wrap_sift(
     offsets = []
     bounds = []
     for idx, im in enumerate(slice_gen):
-
+        if len(im_list) == idx:
+            break
         # # Determine bounds of non-zero region
         # # TODO integrate this into the generator for parallelization!
         # if return_bounds:

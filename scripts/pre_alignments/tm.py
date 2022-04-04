@@ -23,8 +23,13 @@ def _tm(image, template_im, thresh=(0, 0), sigma=1.):
         image[image > thresh[1]] = thresh[1]
         template_im[template_im > thresh[1]] = thresh[1]
     if sigma > 0:
-        image = gaussianSmoothing(image, sigma)
-        template_im = gaussianSmoothing(template_im, sigma)
+        if image.dtype == 'uint16':
+            assert template_im.dtype == 'uint16'
+            image = gaussianSmoothing(image.astype('float32'), sigma).astype('uint16')
+            template_im = gaussianSmoothing(template_im.astype('float32'), sigma).astype('uint16')
+        else:
+            image = gaussianSmoothing(image, sigma)
+            template_im = gaussianSmoothing(template_im, sigma)
 
     # print(f'template_im.shape = {template_im.shape}')
     # print(f'image.shape = {image.shape}')

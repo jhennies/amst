@@ -4,6 +4,7 @@ import os
 from glob import glob
 from tifffile import imread, imsave
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
 
 
 def _post_process_batch(
@@ -13,6 +14,20 @@ def _post_process_batch(
 ):
     print('-----------------------------------')
     print(f'batch_id = {batch_id}')
+
+    # Checking if results exist
+    existing = np.array([
+        os.path.exists(
+            os.path.join(
+                target_path,
+                os.path.split(im_list[idx])[1]
+            )
+        )
+        for idx in range(batch_id, batch_id + batch_size)
+    ])
+    if existing.min():
+        print('Batch results exist!')
+        return
 
     # Select the relevant image slices (padd with None in case of halo out of bounds)
     start = batch_id - batch_halo
@@ -54,12 +69,13 @@ def _post_process_batch(
     for pp_idx, pp in enumerate(postprocess):
         if verbose:
             print(f'applying: {pp}')
-            print(f'with arguments: {postprocess_args}')
-        batch = pp(batch, **postprocess_args[pp_idx])
+            print(f'with arguments: {postprocess_args[pp_idx]}')
+        batch = pp(batch, **postprocess_args[pp_idx], verbose=verbose)
 
     # Save the results (crop to halo!)
-    batch = batch[batch_halo: -batch_halo, :]
-    batch_list = batch_list[batch_halo: -batch_halo]
+    if batch_halo > 0:
+        batch = batch[batch_halo: -batch_halo, :]
+        batch_list = batch_list[batch_halo: -batch_halo]
     for slid, sl in enumerate(batch):
         if batch_list[slid] is not None:
             out_fp = os.path.join(
@@ -80,6 +96,7 @@ def post_process_volume(
         batch_halo=0,
         dtype=None,
         n_workers=os.cpu_count(),
+        parallel_method='process',  # in ['process', 'thread']
         verbose=False
 ):
 
@@ -111,17 +128,34 @@ def post_process_volume(
 
     else:
 
-        print(f'Running with {n_workers} workers ...')
-        with ThreadPoolExecutor(max_workers=n_workers) as tpe:
-            tasks = [
-                tpe.submit(
-                    _post_process_batch, batch_id, im_list, batch_halo, batch_size, im_shape, im_dtype,
-                    postprocess, postprocess_args, roi_xy, target_path,
-                    dtype, verbose
-                )
-                for batch_id in range(0, len(im_list), batch_size)
-            ]
-            [task.result() for task in tasks]
+        if parallel_method == 'thread':
+            print(f'Running with {n_workers} threads ...')
+            with ThreadPoolExecutor(max_workers=n_workers) as tpe:
+                tasks = [
+                    tpe.submit(
+                        _post_process_batch, batch_id, im_list, batch_halo, batch_size, im_shape, im_dtype,
+                        postprocess, postprocess_args, roi_xy, target_path,
+                        dtype, verbose
+                    )
+                    for batch_id in range(0, len(im_list), batch_size)
+                ]
+                [task.result() for task in tasks]
+        elif parallel_method == 'process':
+            print(f'Running with {n_workers} processes ...')
+            with Pool(processes=n_workers) as p:
+                tasks = [
+                    p.apply_async(
+                        _post_process_batch, (
+                            batch_id, im_list, batch_halo, batch_size, im_shape, im_dtype,
+                            postprocess, postprocess_args, roi_xy, target_path,
+                            dtype, verbose
+                        )
+                    )
+                    for batch_id in range(0, len(im_list), batch_size)
+                ]
+                [task.get() for task in tasks]
+        else:
+            raise ValueError(f'parallel_method="{parallel_method}" not in ["thread", "process"]')
 
 
 if __name__ == '__main__':
@@ -187,6 +221,9 @@ if __name__ == '__main__':
         if pp == 'vahe':
             from postprocessing_utils.histogram_equalization import vahe
             return vahe
+        if pp == 'vsnr':
+            from postprocessing_utils.vsnr import vsnr
+            return vsnr
         else:
             raise ValueError(f'Invalid post-processing function: {pp}')
     if type(postprocess) == str or (type(postprocess) == list and len(postprocess) == 1):

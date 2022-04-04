@@ -239,6 +239,42 @@ def default_amst_params():
     )
 
 
+def _norm_8bit(im, quantiles):
+    im = im.astype('float32')
+    upper = np.quantile(im[im > 0], quantiles[1])
+    lower = np.quantile(im[im > 0], quantiles[0])
+    im -= lower
+    im /= (upper - lower)
+    im *= 255
+    im[im > 255] = 255
+    im[im < 0] = 0
+    return im.astype('uint8')
+
+
+from vigra.filters import gaussianGradientMagnitude
+from scripts.postprocessing_utils.histogram_equalization import vahe
+def _load_slice(fp, norm=False, gauss=None, add_gradient=None, clahe=None):
+
+    im = imread(fp)
+    if clahe is not None:
+        dtype = im.dtype
+        im = (vahe(im, clip_limit=clahe[0], kernel_size=clahe[1])
+              * (255 if dtype == 'uint8' else 65535)
+              ).astype(dtype)
+        im -= im.min()
+    if norm:
+        im = _norm_8bit(im, (0.1, 0.9))
+    if gauss is not None:
+        assert im.dtype == 'uint8'
+        im = gaussianSmoothing(im, gauss)
+    if add_gradient is not None:
+        assert im.dtype == 'uint8'
+        im = im.astype('float32')
+        im = ((im.astype('float32') + _norm_8bit(gaussianGradientMagnitude(im, add_gradient), (0.1, 0.9)).astype('float32')) / 2).astype('uint8')
+
+    return im
+
+
 def pre_processing_generator(
         raw_folder,
         pre_alignment_folder,
@@ -251,6 +287,10 @@ def pre_processing_generator(
         raw_pattern='*.tif',
         pre_pattern='*.tif',
         force_alignment=False,
+        normalize_images=False,
+        gaussian_smooth=None,
+        add_gradient=None,
+        clahe=None,
         verbose=False
 ):
     # __________________________________________________________________________________________________________________
@@ -282,7 +322,14 @@ def pre_processing_generator(
                         print('{} already exists, nothing to do...'.format(os.path.split(im_list_raw[idx])[1]))
                     return None, None, None, None, None
             # Load the raw data slice
-            im = imread(im_list_raw[idx])
+            # im = imread(im_list_raw[idx])
+            im = _load_slice(
+                im_list_raw[idx],
+                norm=normalize_images,
+                gauss=gaussian_smooth,
+                add_gradient=add_gradient,
+                clahe=clahe
+            )
             assert im.dtype in ['uint8', 'uint16'], 'Only the data types uint8 and uint16 are supported!'
         else:
             # This happens if the number of images does not divide by the number of batches (smaller last batch)
@@ -295,14 +342,24 @@ def pre_processing_generator(
         start_id = idx - median_radius
         end_id = idx + median_radius + 1
 
+        dtype=None
         # Load the necessary data for the z-median filtered slice
         for load_idx, slice_idx in enumerate(range(start_id, end_id)):
             load_idx += idx - batch_idx
             # print('load_idx = {}; slice_idx = {}'.format(load_idx, slice_idx))
             if 0 <= slice_idx < len(im_list_pre):
                 if template_data[load_idx] is None:
-                    template_data[load_idx] = imread(im_list_pre[slice_idx])
-                    assert template_data[load_idx].dtype == 'uint8', 'Only 8bit template data is supported!'
+                    # template_data[load_idx] = imread(im_list_pre[slice_idx])
+                    template_data[load_idx] = _load_slice(
+                        im_list_pre[slice_idx],
+                        norm=normalize_images,
+                        gauss=gaussian_smooth,
+                        add_gradient=add_gradient,
+                        clahe=clahe
+                    )
+                    if dtype is None:
+                        dtype = template_data[load_idx].dtype
+                    # assert template_data[load_idx].dtype == 'uint8', 'Only 8bit template data is supported!'
             # else:
             #     print('Template data is not None')
             # else:
@@ -310,7 +367,7 @@ def pre_processing_generator(
 
         # Do the median smoothing to obtain one composition image at the current z-position
         ims = [x for x in template_data[idx - batch_idx: idx - batch_idx + median_radius * 2 + 1] if x is not None]
-        median_z = np.median(ims, axis=0).astype('uint8')
+        median_z = np.median(ims, axis=0).astype(dtype)
         del ims
 
         # The sift doesn't like images of different size. This fixes some cases by cropping away areas from the raw data
@@ -351,14 +408,15 @@ def pre_processing_generator(
 
         # Gaussian smooth the image and the median_z for the SIFT step
         if sift_sigma is not None:
-            median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
             if im.dtype == 'uint8':
+                median_z_smooth = gaussianSmoothing(median_z, sift_sigma)
                 im_smooth = gaussianSmoothing(im, sift_sigma)
             else:
                 # vigra.gaussianSmoothing cannot handle 16 bit data
-                im_smooth = gaussianSmoothing(im.astype('float32'), sift_sigma)
-                # The data for the sift step does not require to be 16 bit
-                im_smooth = (im_smooth / (2 ** 16) * (2 ** 8)).astype('uint8')
+                median_z_smooth = gaussianSmoothing(median_z.astype('float32'), sift_sigma).astype('uint16')
+                im_smooth = gaussianSmoothing(im.astype('float32'), sift_sigma).astype('uint16')
+                # # The data for the sift step does not require to be 16 bit
+                # im_smooth = (im_smooth / (2 ** 16) * (2 ** 8)).astype('uint8')
         else:
             median_z_smooth = median_z.copy()
             im_smooth = im.copy()
@@ -374,9 +432,9 @@ def pre_processing_generator(
         # --------------------------------------------------------------------------------------------------------------
         # Return the results
         assert im.dtype in ['uint8', 'uint16']
-        assert im_smooth.dtype == 'uint8'
-        assert median_z.dtype == 'uint8'
-        assert median_z_smooth.dtype == 'uint8'
+        # assert im_smooth.dtype == 'uint8'
+        # assert median_z.dtype == 'uint8'
+        # assert median_z_smooth.dtype == 'uint8'
         return im, im_smooth, median_z, median_z_smooth, template_shape
         # --------------------------------------------------------------------------------------------------------------
 
@@ -548,6 +606,12 @@ def _register_with_elastix(fixed, moving,
     if name is not None and verbose:
         print('Elastix align on {}'.format(name))
 
+    # from vigra.filters import gaussianGradientMagnitude
+    # fdtype = fixed.dtype
+    # mdtype = moving.dtype
+    # fixed = gaussianGradientMagnitude(fixed.astype('float32'), 1.5).astype(fdtype)
+    # moving = gaussianGradientMagnitude(moving.astype('float32'), 1.5).astype(mdtype)
+
     # Set the parameters. Pyelastix offers automatic and sensible defaults
     if transform == 'AffineTransform':
         params = pyelastix.get_default_params(type='AFFINE')
@@ -618,7 +682,11 @@ def amst_align(
         compression=0,
         force_alignment=False,
         apply_only=False,
-        result_name='amst'
+        result_name='amst',
+        normalize_images=False,
+        gaussian_smooth=None,
+        add_gradient=None,
+        clahe=None
 ):
 
     if not os.path.exists(target_folder):
@@ -678,6 +746,10 @@ def amst_align(
             raw_pattern=raw_pattern,
             pre_pattern=pre_pattern,
             force_alignment=force_alignment,
+            normalize_images=normalize_images,
+            gaussian_smooth=gaussian_smooth,
+            add_gradient=add_gradient,
+            clahe=clahe,
             verbose=verbose
     )):
         if coarse_alignment is not None:

@@ -75,7 +75,7 @@ def displace_slices(
     offsets = np.array(offsets)
     shape = None
 
-    if bounds:
+    if bounds is not None:
 
         # Prepare the displacements respective all bounds and figure out the target shape
         offsets_ = []
@@ -91,8 +91,9 @@ def displace_slices(
         min_yx = np.floor(np.min(starts, axis=0)).astype(int)
         max_yx = np.ceil(np.max(stops, axis=0)).astype(int)
         # Pad a little to each side to make it less squished
-        shape = max_yx - min_yx + 32
-        offsets += 16
+        # FIXME make this available as a parameter (amount of padding, e.g. pad_result)
+        shape = max_yx - min_yx  # + 32
+        # offsets += 16
 
     if n_workers == 1:
 

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from scipy.ndimage.interpolation import shift
 from scipy.ndimage.filters import gaussian_filter1d
 from .displacement import displace_slices, subtract_run_avg
+from .data_generation import _crop_zero_padding
 
 
 def _norm_8bit(im):
@@ -27,7 +28,7 @@ def _norm_8bit(im):
     return im.astype('uint8')
 
 
-def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None):
+def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None, no_sobel=False):
     if mask_range is not None:
         image[image < mask_range[0]] = 0
         image[image > mask_range[1]] = 0
@@ -49,18 +50,24 @@ def _xcorr(image, offset_image, thresh=(0, 0), sigma=1., mask_range=None):
     # offset_image = gaussianSmoothing(offset_image.astype('float32'), sigma).astype(dtype)
     image = gaussianSmoothing(image, sigma)
     offset_image = gaussianSmoothing(offset_image, sigma)
-    image = filters.sobel(image)
-    offset_image = filters.sobel(offset_image)
+    if not no_sobel:
+        image = filters.sobel(image)
+        offset_image = filters.sobel(offset_image)
     # shift, error, diffphase = register_translation(image, offset_image, 10)
     shift, error, diffphase = phase_cross_correlation(image, offset_image, upsample_factor=10)
     return shift[1], shift[0]
 
 
-def _wrap_xcorr(im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., mask_range=None, num_ref_ims=1):
+def _wrap_xcorr(
+        im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., no_sobel=False,
+        mask_range=None, num_ref_ims=1, return_bounds=False
+):
     print('{} / {}'.format(im_idx + 1, len(im_list)))
 
     im_filepath = im_list[im_idx]
     im = imread(im_filepath)[xy_range]
+    if return_bounds:
+        bounds = _crop_zero_padding(im)
     if num_ref_ims == 1:
         im_ref_filepath = im_list[im_idx - 1]
         im_ref = imread(im_ref_filepath)[xy_range]
@@ -76,9 +83,12 @@ def _wrap_xcorr(im_idx, im_list, xy_range, thresh=(0, 0), sigma=1., mask_range=N
 
     offset = _xcorr(
         im, im_ref,
-        thresh=thresh, sigma=sigma, mask_range=mask_range
+        thresh=thresh, sigma=sigma, mask_range=mask_range, no_sobel=no_sobel
     )
-    return offset
+    if return_bounds:
+        return offset, bounds
+    else:
+        return offset
 
 
 def _sequentialize_offsets(offsets):
@@ -102,9 +112,11 @@ def offsets_with_xcorr(
         threshold=(0, 0),
         mask_range=None,
         sigma=1.,
+        no_sobel=False,
         compression=0,
         return_sequential=False,
         local_ref_slices=1,
+        return_bounds=False,
         n_workers=1,
         verbose=0
 ):
@@ -123,16 +135,32 @@ def offsets_with_xcorr(
         offsets = []
         for im_idx in range(1, len(im_list)):
             offsets.append(_wrap_xcorr(
-                im_idx, im_list, xy_range, thresh=threshold, sigma=sigma, mask_range=mask_range, num_ref_ims=local_ref_slices
+                im_idx, im_list, xy_range,
+                thresh=threshold,
+                sigma=sigma,
+                no_sobel=no_sobel,
+                mask_range=mask_range,
+                num_ref_ims=local_ref_slices,
+                return_bounds=return_bounds
             ))
     else:
         with ThreadPoolExecutor(max_workers=n_workers) as tpe:
             tasks = [
-                tpe.submit(_wrap_xcorr, im_idx, im_list, xy_range, threshold, sigma, mask_range, local_ref_slices)
+                tpe.submit(
+                    _wrap_xcorr,
+                    im_idx, im_list, xy_range, threshold, sigma, no_sobel,
+                    mask_range, local_ref_slices, return_bounds
+                )
                 for im_idx in range(1, len(im_list))
             ]
             offsets = [task.result() for task in tasks]
 
+    bounds = None
+    if return_bounds:
+        bounds0 = _crop_zero_padding(imread(im_list[0]))
+        offsets, bounds = np.array(offsets).swapaxes(0, 1)
+        offsets = offsets.astype('float32')
+        bounds = np.concatenate((np.array(bounds0)[None, :], bounds), axis=0)
     offsets = -np.array(offsets)
 
     if target_folder is not None or return_sequential:
@@ -168,8 +196,14 @@ def offsets_with_xcorr(
             )
 
         if return_sequential:
-            return seq_offsets
-    return offsets
+            if return_bounds:
+                return seq_offsets, bounds
+            else:
+                return seq_offsets
+    if return_bounds:
+        return offsets, bounds
+    else:
+        return offsets
 
 
 if __name__ == '__main__':
