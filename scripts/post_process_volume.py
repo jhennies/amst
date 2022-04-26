@@ -82,7 +82,24 @@ def _post_process_batch(
                 target_path,
                 os.path.split(batch_list[slid])[1]
             )
-            imsave(out_fp, data=sl.astype(dtype))
+            print(f'dtype = {dtype}')
+            if dtype == 'uint8' or dtype == 'uint16':
+                print(f'sl.dtype = {sl.dtype}')
+                print(f'sl.max() = {sl.max()}')
+                if (sl.dtype == 'float64' or sl.dtype == 'float32' or sl.dtype == 'float16') and sl.max() <= 1.:
+                    if dtype == 'uint8':
+                        sl_out = sl * 255
+                    elif dtype == 'uint16':
+                        sl_out = sl * 65535
+                    else:
+                        raise ValueError
+                    print(f'sl_out.max() = {sl_out.max()}')
+                else:
+                    sl_out = sl
+                sl_out = sl_out.astype(dtype)
+            else:
+                sl_out = sl.astype(dtype)
+            imsave(out_fp, data=sl_out)
 
 
 def post_process_volume(

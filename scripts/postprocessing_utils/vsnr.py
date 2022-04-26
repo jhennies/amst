@@ -21,8 +21,10 @@ def _norm(im, quantiles):
     return im
 
 
-def vsnr(img, alpha=1e-2, filter='gabor', sigma=(1, 30), theta=0, verbose=False):
+def vsnr(img, alpha=1e-2, filter='gabor', sigma=(1, 30), theta=0, maxit=100, is_gpu=True, verbose=False):
 
+    if verbose:
+        print(f'img.dtype = {img.dtype}')
     return_vol = False
     if img.ndim == 3:
         assert img.shape[0] == 1
@@ -45,23 +47,29 @@ def vsnr(img, alpha=1e-2, filter='gabor', sigma=(1, 30), theta=0, verbose=False)
 
     img = img.astype('float32')
     imax = img.max()
+    if verbose:
+        print(f'imax = {imax}')
     img /= imax
 
     # vsnr object creation
     vsnr = VSNR(img.shape)
 
-    # add filter (at least one !)
-    # vsnr.add_filter(alpha=1e-2, name='gabor', sigma=(1, 30), theta=20)
-    vsnr.add_filter(alpha=alpha, name=filter, sigma=sigma, theta=theta)
-    #
-    # vsnr.add_filter(alpha=1e-2, name='gabor', sigma=(1, 30), theta=20)
-    # vsnr.add_filter(alpha=5e-2, name='gabor', sigma=(3, 40), theta=20)
+    if type(alpha) != list:
+        # add filter (at least one !)
+        # vsnr.add_filter(alpha=1e-2, name='gabor', sigma=(1, 30), theta=20)
+        vsnr.add_filter(alpha=alpha, name=filter, sigma=sigma, theta=theta)
+        #
+        # vsnr.add_filter(alpha=1e-2, name='gabor', sigma=(1, 30), theta=20)
+        # vsnr.add_filter(alpha=5e-2, name='gabor', sigma=(3, 40), theta=20)
+    else:
+        for idx, a in enumerate(alpha):
+            vsnr.add_filter(alpha=a, name=filter, sigma=sigma[idx], theta=theta[idx])
 
     # vsnr initialization
-    vsnr.initialize()
+    vsnr.initialize(is_gpu=is_gpu)
 
     # image processing
-    img = vsnr.eval(img, maxit=100)  # , cvg_threshold=1e-4)
+    img = vsnr.eval(img, maxit=maxit)  # , cvg_threshold=1e-4)
     img = np.clip(img, 0, 1) * imax
 
     img_ = np.zeros(return_shape, dtype=img.dtype)
