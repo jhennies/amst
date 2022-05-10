@@ -120,12 +120,13 @@ def _wrap_sift(
         verbose=False
 ):
 
-    if verbose:
-        print(f'devicetype = {devicetype}')
-        print(f'n_workers = {n_workers}')
-        print(f'thresh = {thresh}')
-        print(f'sigma = {sigma}')
-        print(f'mask_range = {mask_range}')
+    # if verbose:
+    print(f'verbose = {verbose}')
+    print(f'devicetype = {devicetype}')
+    print(f'n_workers = {n_workers}')
+    print(f'thresh = {thresh}')
+    print(f'sigma = {sigma}')
+    print(f'mask_range = {mask_range}')
 
     sift_ocl = _init_sift(
         im_list[0],
