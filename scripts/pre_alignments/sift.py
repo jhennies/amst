@@ -152,7 +152,7 @@ def _wrap_sift(
         print(f'starting process pool with {n_workers} workers ...')
         with Pool(processes=n_workers) as p:
             tasks = []
-            for idx, im_ref, im in enumerate(slice_gen):
+            for idx, (im_ref, im) in enumerate(slice_gen):
                 print(f'SIFT on image {idx}: {im_list[idx]}')
                 if len(im_list) == idx:
                     break
