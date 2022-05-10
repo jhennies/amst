@@ -163,7 +163,7 @@ def _wrap_sift(
                 tasks.append(p.apply_async(
                     _sift, (
                         im, im_ref,
-                        sift_ocl,
+                        None,
                         False,
                         norm_quantiles,
                         verbose
