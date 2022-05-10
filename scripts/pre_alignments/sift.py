@@ -143,7 +143,7 @@ def _wrap_sift(
             preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
             yield_consecutive=True,
             yield_bounds=return_bounds,
-            n_workers=1
+            n_workers=n_workers
         )
 
         offsets = []
