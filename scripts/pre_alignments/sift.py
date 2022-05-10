@@ -152,13 +152,13 @@ def _wrap_sift(
         with Pool(processes=n_workers) as p:
             tasks = []
             for idx, im_ref, im in enumerate(slice_gen):
+                print(f'SIFT on image {idx}: {im_list[idx]}')
                 if len(im_list) == idx:
                     break
                 if return_bounds:
                     bounds.append(im[1])
                     im = im[0]
 
-                print(f'SIFT on image {idx}: {im_list[idx]}')
                 tasks.append(p.apply_async(
                     _sift, (
                         im, im_ref,
