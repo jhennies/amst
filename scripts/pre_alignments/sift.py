@@ -149,6 +149,7 @@ def _wrap_sift(
         offsets = []
         bounds = []
         # TODO Parallelize this loop
+        print(f'starting process pool with {n_workers} workers ...')
         with Pool(processes=n_workers) as p:
             tasks = []
             for idx, im_ref, im in enumerate(slice_gen):
