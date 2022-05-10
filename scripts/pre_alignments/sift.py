@@ -119,7 +119,6 @@ def _wrap_sift(
         return_bounds=False,
         verbose=False
 ):
-    assert n_gpus == 1, 'Only implemented for the use of one GPU'
 
     if verbose:
         print(f'devicetype = {devicetype}')
@@ -128,27 +127,6 @@ def _wrap_sift(
         print(f'sigma = {sigma}')
         print(f'mask_range = {mask_range}')
 
-    # slice_gen = parallel_image_slice_generator(
-    #     im_list, xy_range,
-    #     preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
-    #     yield_consecutive=True,
-    #     n_workers=n_workers
-    # )
-    #
-    # return [
-    #     _sift(ims[1], ims[0], devicetype=devicetype, verbose=verbose)
-    #     for ims in slice_gen
-    # ]
-
-    slice_gen = parallel_image_slice_generator(
-        im_list, xy_range,
-        preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
-        yield_consecutive=False,
-        yield_bounds=return_bounds,
-        n_workers=n_workers
-    )
-
-    keypoints = None
     sift_ocl = _init_sift(
         im_list[0],
         devicetype=devicetype,
@@ -156,28 +134,94 @@ def _wrap_sift(
         norm_quantiles=norm_quantiles
     )
     print("Device used for SIFT calculation: ", sift_ocl.ctx.devices[0].name)
-    offsets = []
-    bounds = []
-    for idx, im in enumerate(slice_gen):
-        if len(im_list) == idx:
-            break
-        # # Determine bounds of non-zero region
-        # # TODO integrate this into the generator for parallelization!
-        # if return_bounds:
-        #     bounds.append(_crop_zero_padding(im))
-        if return_bounds:
-            bounds.append(im[1])
-            im = im[0]
 
-        print(f'SIFT on image {idx}: {im_list[idx]}')
-        offset, keypoints = _sift(
-            im, keypoints,
-            sift_ocl=sift_ocl,
-            return_keypoints=True,
-            norm_quantiles=norm_quantiles,
-            verbose=verbose
+    if devicetype == 'CPU':
+
+        slice_gen = parallel_image_slice_generator(
+            im_list, xy_range,
+            preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
+            yield_consecutive=True,
+            yield_bounds=return_bounds,
+            n_workers=1
         )
-        offsets.append(offset)
+
+        offsets = []
+        bounds = []
+        # TODO Parallelize this loop
+        with Pool(processes=n_workers) as p:
+            tasks = []
+            for idx, im_ref, im in enumerate(slice_gen):
+                if len(im_list) == idx:
+                    break
+                if return_bounds:
+                    bounds.append(im[1])
+                    im = im[0]
+
+                print(f'SIFT on image {idx}: {im_list[idx]}')
+                tasks.append(p.apply_async(
+                    _sift, (
+                        im, im_ref,
+                        sift_ocl,
+                        False,
+                        norm_quantiles,
+                        verbose
+                    )
+                ))
+
+            for task in tasks:
+                offset = task.get()
+                offsets.append(offset)
+
+    elif devicetype == 'GPU':
+
+        assert n_gpus == 1, 'Only implemented for the use of one GPU'
+
+        # slice_gen = parallel_image_slice_generator(
+        #     im_list, xy_range,
+        #     preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
+        #     yield_consecutive=True,
+        #     n_workers=n_workers
+        # )
+        #
+        # return [
+        #     _sift(ims[1], ims[0], devicetype=devicetype, verbose=verbose)
+        #     for ims in slice_gen
+        # ]
+
+        slice_gen = parallel_image_slice_generator(
+            im_list, xy_range,
+            preprocess_slice, {'thresh': thresh, 'sigma': sigma, 'mask_range': mask_range},
+            yield_consecutive=False,
+            yield_bounds=return_bounds,
+            n_workers=n_workers
+        )
+
+        keypoints = None
+        offsets = []
+        bounds = []
+        for idx, im in enumerate(slice_gen):
+            if len(im_list) == idx:
+                break
+            # # Determine bounds of non-zero region
+            # # TODO integrate this into the generator for parallelization!
+            # if return_bounds:
+            #     bounds.append(_crop_zero_padding(im))
+            if return_bounds:
+                bounds.append(im[1])
+                im = im[0]
+
+            print(f'SIFT on image {idx}: {im_list[idx]}')
+            offset, keypoints = _sift(
+                im, keypoints,
+                sift_ocl=sift_ocl,
+                return_keypoints=True,
+                norm_quantiles=norm_quantiles,
+                verbose=verbose
+            )
+            offsets.append(offset)
+
+    else:
+        raise ValueError(f'unknown devicetype: {devicetype}')
 
     if return_bounds:
         return offsets[1:], bounds
