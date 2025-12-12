@@ -1,5 +1,7 @@
 **A new implementation of AMST is available at https://github.com/jhennies/AMST2**
 
+Note that I am not developing this version anymore.
+
 # AMST
 Alignment to Median Smoothed Template for FIB-SEM data ([hennies et al., 2020](https://doi.org/10.1038/s41598-020-58736-7)).
 
